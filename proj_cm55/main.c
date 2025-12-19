@@ -1,0 +1,297 @@
+/******************************************************************************
+* File Name : main.c
+*
+* Description :
+* main function for CM55 application.
+********************************************************************************
+ * (c) 2025, Infineon Technologies AG, or an affiliate of Infineon
+ * Technologies AG. All rights reserved.
+ * This software, associated documentation and materials ("Software") is
+ * owned by Infineon Technologies AG or one of its affiliates ("Infineon")
+ * and is protected by and subject to worldwide patent protection, worldwide
+ * copyright laws, and international treaty provisions. Therefore, you may use
+ * this Software only as provided in the license agreement accompanying the
+ * software package from which you obtained this Software. If no license
+ * agreement applies, then any use, reproduction, modification, translation, or
+ * compilation of this Software is prohibited without the express written
+ * permission of Infineon.
+ *
+ * Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+ * IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+ * INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
+ * THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
+ * SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
+ * Infineon reserves the right to make changes to the Software without notice.
+ * You are responsible for properly designing, programming, and testing the
+ * functionality and safety of your intended application of the Software, as
+ * well as complying with any legal requirements related to its use. Infineon
+ * does not guarantee that the Software will be free from intrusion, data theft
+ * or loss, or other breaches ("Security Breaches"), and Infineon shall have
+ * no liability arising out of any Security Breaches. Unless otherwise
+ * explicitly approved by Infineon, the Software may not be used in any
+ * application where a failure of the Product or any consequences of the use
+ * thereof can reasonably be expected to result in personal injury.
+*******************************************************************************/
+
+/*******************************************************************************
+* Header Files
+*******************************************************************************/
+#include "app_logger.h"
+#include "mtb_hal.h"
+#include "cybsp.h"
+#include "cy_retarget_io.h"
+
+#include "FreeRTOS.h"
+#include "task.h"
+#include "cyabs_rtos.h"
+#include "cyabs_rtos_impl.h"
+#include "timers.h"
+
+#include "battery_powered_app_hp.h"
+#include "pmu_ethosu.h"
+
+/*******************************************************************************
+ * Macros
+ ******************************************************************************/
+/* Enabling or disabling a MCWDT requires a wait time of upto 2 CLK_LF cycles  
+ * to come into effect. This wait time value will depend on the actual CLK_LF  
+ * frequency set by the BSP.
+ */
+#define LPTIMER_1_WAIT_TIME_USEC            (62U)
+
+/* Define the LPTimer interrupt priority number. '1' implies highest priority. 
+ */
+#define APP_LPTIMER_INTERRUPT_PRIORITY      (1U)
+
+#ifdef LOW_POWER_MODE
+#define WAIT_FOR_TX_COMPLETE()              while (!(Cy_SCB_UART_IsTxComplete \
+                                                       (CYBSP_DEBUG_UART_HW)))
+#endif /* LOW_POWER_MODE */
+
+/* Address to get status of first launch of CM55 */
+#define IS_FIRST_LAUNCH_ADDR                (0x240FEFF0)
+/*******************************************************************************
+* Global Variables
+*******************************************************************************/
+/* Debug UART context */
+cy_stc_scb_uart_context_t  DEBUG_UART_context;
+/* Debug UART HAL object  */
+mtb_hal_uart_t             DEBUG_UART_hal_obj;
+
+/* LPTimer HAL object */
+static mtb_hal_lptimer_t lptimer_obj;
+
+/* First launch of CM55: 1: first launch, 0: subsequent launch */
+volatile uint8_t *is_first_launch = (uint8_t *)IS_FIRST_LAUNCH_ADDR; 
+
+extern struct ethosu_driver *mtb_ml_ethosu_driver_handle;
+/*******************************************************************************
+* Function Prototypes
+*******************************************************************************/
+void app_retarget_io_init(void);
+static void lptimer_interrupt_handler(void);
+static void setup_tickless_idle_timer(void);
+static void handle_error(void);
+/*****************************************************************************
+* Function Name: main
+******************************************************************************
+* Summary:
+* This is the main function for CM55 application. 
+* 
+* Parameters:
+*  void
+*
+* Return:
+*  int
+*
+*****************************************************************************/
+int main(void)
+{
+    cy_rslt_t result;
+
+    /* Initialize the device and board peripherals */
+    result = cybsp_init();
+
+    /* Board init failed. Stop program execution */
+    if (CY_RSLT_SUCCESS != result)
+    {
+        app_log_print("Board initialization failed\r\n");
+        CY_ASSERT(0);
+    }
+
+    /* Enable global interrupts */
+    __enable_irq();
+
+    if(*is_first_launch)
+    {
+        Cy_SysPm_CpuEnterDeepSleep(CY_SYSPM_WAIT_FOR_INTERRUPT);
+    }
+    else
+    {
+        /* Setup the LPTimer instance for CM55 */
+        setup_tickless_idle_timer();
+        /* Initialize retarget-io */
+        app_retarget_io_init();
+        /* Init high perfomance/CM55 core local voice application */
+        battery_powered_app_hp();
+        /* Soft Reset U55 */
+        ethosu_soft_reset(mtb_ml_ethosu_driver_handle);
+        /* Start the RTOS Scheduler */
+        vTaskStartScheduler();
+    }
+    return 0;
+}
+
+
+/*******************************************************************************
+* Function Name: app_retarget_io_init
+********************************************************************************
+* Summary:
+* This function initializes Debug UART
+*
+* Parameters:
+*  none
+*
+* Return :
+*  none
+*
+*******************************************************************************/
+void app_retarget_io_init()
+{
+    cy_rslt_t result;
+
+    result = (cy_rslt_t)Cy_SCB_UART_Init(CYBSP_DEBUG_UART_HW, &CYBSP_DEBUG_UART_config, &DEBUG_UART_context);
+    if (result != CY_RSLT_SUCCESS)
+    {
+        app_log_print("UART initialization failed\r\n");
+        CY_ASSERT(0);
+    }
+
+    Cy_SCB_UART_Enable(CYBSP_DEBUG_UART_HW);
+    result = mtb_hal_uart_setup(&DEBUG_UART_hal_obj, &CYBSP_DEBUG_UART_hal_config, &DEBUG_UART_context, NULL);
+    if (result != CY_RSLT_SUCCESS)
+    {
+        app_log_print("mtb hal UART setup failed\r\n");
+        CY_ASSERT(0);
+    }
+
+    result = cy_retarget_io_init(&DEBUG_UART_hal_obj);
+    
+}
+
+
+/*******************************************************************************
+* Function Name: lptimer_interrupt_handler
+********************************************************************************
+* Summary:
+* Interrupt handler function for LPTimer instance. 
+*
+* Parameters:
+*  void
+*
+* Return:
+*  void
+*
+*******************************************************************************/
+static void lptimer_interrupt_handler(void)
+{
+    mtb_hal_lptimer_process_interrupt(&lptimer_obj);
+}
+
+/*******************************************************************************
+* Function Name: setup_tickless_idle_timer
+********************************************************************************
+* Summary:
+* 1. This function first configures and initializes an interrupt for LPTimer.
+* 2. Then it initializes the LPTimer HAL object to be used in the RTOS 
+*    tickless idle mode implementation to allow the device enter deep sleep 
+*    when idle task runs. LPTIMER_1 instance is configured for CM55 CPU.
+* 3. It then passes the LPTimer object to abstraction RTOS library that 
+*    implements tickless idle mode
+*
+* Parameters:
+*  void
+*
+* Return:
+*  void
+*
+*******************************************************************************/
+static void setup_tickless_idle_timer(void)
+{
+    /* Interrupt configuration structure for LPTimer */
+    cy_stc_sysint_t lptimer_intr_cfg =
+    {
+        .intrSrc = CYBSP_CM55_LPTIMER_1_IRQ,
+        .intrPriority = APP_LPTIMER_INTERRUPT_PRIORITY
+    };
+
+    /* Initialize the LPTimer interrupt and specify the interrupt handler. */
+    cy_en_sysint_status_t interrupt_init_status = 
+                                    Cy_SysInt_Init(&lptimer_intr_cfg, 
+                                                    lptimer_interrupt_handler);
+    
+    /* LPTimer interrupt initialization failed. Stop program execution. */
+    if(CY_SYSINT_SUCCESS != interrupt_init_status)
+    {
+        handle_error();
+    }
+
+    /* Enable NVIC interrupt. */
+    NVIC_EnableIRQ(lptimer_intr_cfg.intrSrc);
+
+    /* Initialize the MCWDT block */
+    cy_en_mcwdt_status_t mcwdt_init_status = 
+                                    Cy_MCWDT_Init(CYBSP_CM55_LPTIMER_1_HW, 
+                                                &CYBSP_CM55_LPTIMER_1_config);
+
+    /* MCWDT initialization failed. Stop program execution. */
+    if(CY_MCWDT_SUCCESS != mcwdt_init_status)
+    {
+        handle_error();
+    }
+  
+    /* Enable MCWDT instance */
+    Cy_MCWDT_Enable(CYBSP_CM55_LPTIMER_1_HW,
+                    CY_MCWDT_CTR_Msk, 
+                    LPTIMER_1_WAIT_TIME_USEC);
+
+    /* Setup LPTimer using the HAL object and desired configuration as defined
+     * in the device configurator. */
+    cy_rslt_t result = mtb_hal_lptimer_setup(&lptimer_obj, 
+                                            &CYBSP_CM55_LPTIMER_1_hal_config);
+    
+    /* LPTimer setup failed. Stop program execution. */
+    if(CY_RSLT_SUCCESS != result)
+    {
+        handle_error();
+    }
+
+    /* Pass the LPTimer object to abstraction RTOS library that implements 
+     * tickless idle mode 
+     */
+    cyabs_rtos_set_lptimer(&lptimer_obj);
+}
+
+/*******************************************************************************
+* Function Name: handle_error
+********************************************************************************
+* Summary:
+* User defined error handling function
+*
+* Parameters:
+*  void
+*
+* Return:
+*  void
+*
+*******************************************************************************/
+static void handle_error(void)
+{
+    /* Disable all interrupts. */
+    __disable_irq();
+
+    app_log_print("Disable all interrupts\r\n");
+
+    CY_ASSERT(0);
+}
+/* [] END OF FILE */
