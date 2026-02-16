@@ -7,7 +7,7 @@
 #
 ################################################################################
 # \copyright
-# (c) 2025, Infineon Technologies AG, or an affiliate of Infineon
+# (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
 # Technologies AG.  SPDX-License-Identifier: Apache-2.0
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,6 +39,10 @@ ifeq ($(TOOLCHAIN),ARM)
 #   Uncomment after importing the project or set this variable as env variable in the PC.
 #    For Eg) CY_COMPILER_ARM_DIR=C:/Program Files/ArmCompilerforEmbedded6.22
 endif
+
+# Toolchains supported by this code example. See README.md file.
+# This is used by automated build systems to identify the supported toolchains.
+MTB_SUPPORTED_TOOLCHAINS?=ARM
 
 # Default build configuration. Options include:
 #
