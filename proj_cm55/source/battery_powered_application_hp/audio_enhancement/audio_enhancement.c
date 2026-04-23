@@ -4,33 +4,33 @@
 * Description :
 * Code for DEEPCRAFT audio enhancement (AE)
 ********************************************************************************
- * (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
- * Technologies AG. All rights reserved.
- * This software, associated documentation and materials ("Software") is
- * owned by Infineon Technologies AG or one of its affiliates ("Infineon")
- * and is protected by and subject to worldwide patent protection, worldwide
- * copyright laws, and international treaty provisions. Therefore, you may use
- * this Software only as provided in the license agreement accompanying the
- * software package from which you obtained this Software. If no license
- * agreement applies, then any use, reproduction, modification, translation, or
- * compilation of this Software is prohibited without the express written
- * permission of Infineon.
- *
- * Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
- * IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
- * THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
- * SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
- * Infineon reserves the right to make changes to the Software without notice.
- * You are responsible for properly designing, programming, and testing the
- * functionality and safety of your intended application of the Software, as
- * well as complying with any legal requirements related to its use. Infineon
- * does not guarantee that the Software will be free from intrusion, data theft
- * or loss, or other breaches ("Security Breaches"), and Infineon shall have
- * no liability arising out of any Security Breaches. Unless otherwise
- * explicitly approved by Infineon, the Software may not be used in any
- * application where a failure of the Product or any consequences of the use
- * thereof can reasonably be expected to result in personal injury.
+* (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
+* Technologies AG. All rights reserved.
+* This software, associated documentation and materials ("Software") is
+* owned by Infineon Technologies AG or one of its affiliates ("Infineon")
+* and is protected by and subject to worldwide patent protection, worldwide
+* copyright laws, and international treaty provisions. Therefore, you may use
+* this Software only as provided in the license agreement accompanying the
+* software package from which you obtained this Software. If no license
+* agreement applies, then any use, reproduction, modification, translation, or
+* compilation of this Software is prohibited without the express written
+* permission of Infineon.
+*
+* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+* INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
+* THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
+* SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
+* Infineon reserves the right to make changes to the Software without notice.
+* You are responsible for properly designing, programming, and testing the
+* functionality and safety of your intended application of the Software, as
+* well as complying with any legal requirements related to its use. Infineon
+* does not guarantee that the Software will be free from intrusion, data theft
+* or loss, or other breaches ("Security Breaches"), and Infineon shall have
+* no liability arising out of any Security Breaches. Unless otherwise
+* explicitly approved by Infineon, the Software may not be used in any
+* application where a failure of the Product or any consequences of the use
+* thereof can reasonably be expected to result in personal injury.
 *******************************************************************************/
 
 /*******************************************************************************
@@ -72,7 +72,7 @@ ae_buffer_info_t ae_output_buffer_info = {0};
 /****************************************************************************
 * Global variables
 *****************************************************************************/
-extern volatile int8_t ae_toggle_flag;
+extern volatile bool ae_toggle_flag;
 
 /*******************************************************************************
 * Function Name: ae_output_callback
@@ -93,6 +93,13 @@ static cy_rslt_t ae_output_callback(cy_afe_t handle, cy_afe_buffer_info_t *outpu
 {
     ae_output_buffer_info.output_buf = (int16_t *) output_buffer_info->output_buf;
     ae_output_buffer_info.input_buf = (int16_t *) output_buffer_info->input_buf;
+    ae_output_buffer_info.input_aec_ref_buf = (int16_t *) output_buffer_info->input_aec_ref_buf;
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+    ae_output_buffer_info.dbg_output1 = (int16_t *) output_buffer_info->dbg_output1;
+    ae_output_buffer_info.dbg_output2 = (int16_t *) output_buffer_info->dbg_output2;
+    ae_output_buffer_info.dbg_output3 = (int16_t *) output_buffer_info->dbg_output3;
+    ae_output_buffer_info.dbg_output4 = (int16_t *) output_buffer_info->dbg_output4;
+#endif
     audio_enhancement_process_output(&ae_output_buffer_info);
     return CY_RSLT_SUCCESS;
 }
@@ -145,7 +152,6 @@ cy_rslt_t ae_alloc_memory(cy_afe_mem_id_t mem_id, uint32_t size, void **buffer)
         return ret_val;
     }
     *buffer = NULL;
-    app_log_print("app afe alloc size %ld \r\n", (long)size);
     /* If size equal ZERO, no allocation required */
     if (size == 0)
     {
@@ -159,7 +165,6 @@ cy_rslt_t ae_alloc_memory(cy_afe_mem_id_t mem_id, uint32_t size, void **buffer)
     {
         case CY_AFE_MEM_ID_ALGORITHM_NS_MEMORY:
         {
-            app_log_print("DSNS Memory requires %ld bytes \r\n", (long)size);
             ae_dsns_mem = calloc(size+15,1);
             if (ae_dsns_mem == NULL)
             {
@@ -175,7 +180,6 @@ cy_rslt_t ae_alloc_memory(cy_afe_mem_id_t mem_id, uint32_t size, void **buffer)
         
         case CY_AFE_MEM_ID_ALGORITHM_ES_MEMORY:
         {
-            app_log_print("DSES Memory requires %ld bytes \r\n", (long)size);
             ae_dses_mem = calloc(size+15,1);
             if (ae_dses_mem == NULL)
             {
@@ -190,7 +194,6 @@ cy_rslt_t ae_alloc_memory(cy_afe_mem_id_t mem_id, uint32_t size, void **buffer)
         }
         case CY_AFE_MEM_ID_ALGORITHM_PERSISTENT_MEMORY:
         {
-            app_log_print("Persistent Memory requires %ld bytes \r\n", (long)size);
 
             if(size > AE_ALGO_PERSISTENT_MEMORY)
             {
@@ -211,7 +214,6 @@ cy_rslt_t ae_alloc_memory(cy_afe_mem_id_t mem_id, uint32_t size, void **buffer)
         }
         case CY_AFE_MEM_ID_ALGORITHM_SCRATCH_MEMORY:
         {
-            app_log_print("Scratch Memory requires %ld bytes \r\n", (long)size);
             if(size > AE_ALGO_SCRATCH_MEMORY)
             {
                 app_log_print("Defaulting to heap allocation for scratch memory \r\n");
@@ -261,11 +263,7 @@ cy_rslt_t ae_alloc_memory(cy_afe_mem_id_t mem_id, uint32_t size, void **buffer)
 cy_rslt_t ae_free_memory(cy_afe_mem_id_t mem_id, void *buffer)
 {
     int ae_mem_id = (int)mem_id;
-    if (buffer != NULL)
-    {
-          free(buffer);
-          buffer = NULL;
-    }
+
     switch(ae_mem_id)
     {
         case CY_AFE_MEM_ID_ALGORITHM_ES_MEMORY:
@@ -287,11 +285,93 @@ cy_rslt_t ae_free_memory(cy_afe_mem_id_t mem_id, void *buffer)
             break;
         }
         default:
+            if (buffer != NULL)
+            {
+                free(buffer);
+                buffer = NULL;
+            }
             break;
     }
 
     return CY_RSLT_SUCCESS;
 }
+
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+/*******************************************************************************
+* Function Name: ae_tuner_notify_callback
+********************************************************************************
+* Summary:
+*  Tuner notification callback from AFE middleware.
+*
+* Parameters:
+*  handle - AFE handle
+*  config_setting - Configuration settings.
+*  user_arg - User argument.
+
+* Return:
+*  CY_RSLT_SUCCESS
+*
+*******************************************************************************/
+static cy_rslt_t ae_tuner_notify_callback(cy_afe_t handle, 
+                                          cy_afe_config_setting_t *config_setting, 
+                                          void *user_arg)
+{
+    (void) user_arg;
+
+    return audio_enhancement_tuner_notify(handle,config_setting);
+
+}
+
+/*******************************************************************************
+* Function Name: ae_tuner_read_callback
+********************************************************************************
+* Summary:
+*  Callback for AFE read operation.
+*
+* Parameters:
+*  handle - AFE handle
+*  request_buffer - Buffer with read data.
+*  user_arg - user argument.
+*
+* Return:
+*  CY_RSLT_SUCCESS
+*
+*******************************************************************************/
+static cy_rslt_t ae_tuner_read_callback(cy_afe_t handle, 
+                                        cy_afe_tuner_buffer_t *request_buffer, 
+                                        void *user_arg)
+{
+    (void) user_arg;
+
+    audio_enhancement_tuner_read(request_buffer);
+
+    return CY_RSLT_SUCCESS;
+}
+
+/*******************************************************************************
+* Function Name: ae_tuner_write_callback
+********************************************************************************
+* Summary:
+*  Callback for AFE write operation.
+*
+* Parameters:
+*  handle - AFE handle
+*  response_buffer - buffer with write data.
+*  user_arg - user argument.
+*
+* Return:
+*  CY_RSLT_SUCCESS
+*
+*******************************************************************************/
+static cy_rslt_t ae_tuner_write_callback(cy_afe_t handle, 
+                                         cy_afe_tuner_buffer_t *response_buffer, 
+                                         void *user_arg)
+{
+    return audio_enhancement_tuner_write(response_buffer);
+
+}
+
+#endif
 
 /*******************************************************************************
  * Function Name: audio_enhancement_init
@@ -302,7 +382,7 @@ cy_rslt_t ae_free_memory(cy_afe_mem_id_t mem_id, void *buffer)
  * audio data.
  *
  * Parameters:
- *  num_channels: Number of channels AFE channels to init
+ *  void
  *
  * Return:
  *  Returns AE_RSLT_SUCCESS if successful, otherwise returns an error code.
@@ -332,6 +412,18 @@ ae_rslt_t audio_enhancement_init(uint8_t num_channels)
     afe_config.mw_settings_length = 0;
 #endif /* AFE_MW_SETTINGS_SIZE */
 
+
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+    cy_afe_tuner_callbacks_t tuner_cb;
+
+    /* Tuner callbacks */
+    tuner_cb.notify_settings_callback = ae_tuner_notify_callback;
+    tuner_cb.read_request_callback = ae_tuner_read_callback;
+    tuner_cb.write_response_callback = ae_tuner_write_callback;
+    afe_config.tuner_cb = tuner_cb;
+
+    afe_config.poll_interval_ms = 100; // Invoke next read after 5sec if no data received on previous read call
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
 
     afe_config.alloc_memory = ae_alloc_memory;
     afe_config.free_memory = ae_free_memory;

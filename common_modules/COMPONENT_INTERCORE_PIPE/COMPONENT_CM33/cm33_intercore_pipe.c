@@ -5,33 +5,33 @@
 * Intercore IPC pipe on CM33 core for Staged Voice Control.
 *
 ********************************************************************************
- * (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
- * Technologies AG. All rights reserved.
- * This software, associated documentation and materials ("Software") is
- * owned by Infineon Technologies AG or one of its affiliates ("Infineon")
- * and is protected by and subject to worldwide patent protection, worldwide
- * copyright laws, and international treaty provisions. Therefore, you may use
- * this Software only as provided in the license agreement accompanying the
- * software package from which you obtained this Software. If no license
- * agreement applies, then any use, reproduction, modification, translation, or
- * compilation of this Software is prohibited without the express written
- * permission of Infineon.
- *
- * Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
- * IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
- * THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
- * SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
- * Infineon reserves the right to make changes to the Software without notice.
- * You are responsible for properly designing, programming, and testing the
- * functionality and safety of your intended application of the Software, as
- * well as complying with any legal requirements related to its use. Infineon
- * does not guarantee that the Software will be free from intrusion, data theft
- * or loss, or other breaches ("Security Breaches"), and Infineon shall have
- * no liability arising out of any Security Breaches. Unless otherwise
- * explicitly approved by Infineon, the Software may not be used in any
- * application where a failure of the Product or any consequences of the use
- * thereof can reasonably be expected to result in personal injury.
+* (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
+* Technologies AG. All rights reserved.
+* This software, associated documentation and materials ("Software") is
+* owned by Infineon Technologies AG or one of its affiliates ("Infineon")
+* and is protected by and subject to worldwide patent protection, worldwide
+* copyright laws, and international treaty provisions. Therefore, you may use
+* this Software only as provided in the license agreement accompanying the
+* software package from which you obtained this Software. If no license
+* agreement applies, then any use, reproduction, modification, translation, or
+* compilation of this Software is prohibited without the express written
+* permission of Infineon.
+*
+* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+* INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
+* THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
+* SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
+* Infineon reserves the right to make changes to the Software without notice.
+* You are responsible for properly designing, programming, and testing the
+* functionality and safety of your intended application of the Software, as
+* well as complying with any legal requirements related to its use. Infineon
+* does not guarantee that the Software will be free from intrusion, data theft
+* or loss, or other breaches ("Security Breaches"), and Infineon shall have
+* no liability arising out of any Security Breaches. Unless otherwise
+* explicitly approved by Infineon, the Software may not be used in any
+* application where a failure of the Product or any consequences of the use
+* thereof can reasonably be expected to result in personal injury.
 *******************************************************************************/
 
 /*******************************************************************************
@@ -168,9 +168,6 @@ void ipc_pipe_cm33ns_cm55(void)
 
     Cy_IPC_Pipe_Config(systemIpcPipeEpArray);
 
-    app_log_print("\r ============================START============================== \r\n");
-    app_log_print("[CM33] IPC Application Main...\r\n");
-
     static cy_ipc_pipe_callback_ptr_t ep1CbArray[CY_IPC_CYPIPE_CLIENT_CNT]; /* CB Array for EP1 */
 
     /* Pipe-2 endpoint-1 and endpoint-2. CM33 <--> CM55 */
@@ -205,18 +202,6 @@ void ipc_pipe_cm33ns_cm55(void)
     /* .userPipeIsrHandler         */  &Cy_SysIpcPipeIsrCm33
     };
 
-#if defined (__ARMCC_VERSION)
-    app_log_print ("[CM33][EP1] IPC Channel-%d address[0x%x] Intr-%d address[0x%x] \r\n", CY_IPC_CHAN_CYPIPE_EP1,
-                                                                                    (uint32_t)Cy_IPC_Drv_GetIpcBaseAddress(CY_IPC_CHAN_CYPIPE_EP1),
-                                                                                    CY_IPC_INTR_CYPIPE_EP1,
-                                                                                    (uint32_t)Cy_IPC_Drv_GetIntrBaseAddr(CY_IPC_INTR_CYPIPE_EP1));
-#else
-    app_log_print ("[CM33][EP1] IPC Channel-%d address[0x%lx] Intr-%d address[0x%lx] \r\n", CY_IPC_CHAN_CYPIPE_EP1,
-                                                                                    (uint32_t)Cy_IPC_Drv_GetIpcBaseAddress(CY_IPC_CHAN_CYPIPE_EP1),
-                                                                                    CY_IPC_INTR_CYPIPE_EP1,
-                                                                                    (uint32_t)Cy_IPC_Drv_GetIntrBaseAddr(CY_IPC_INTR_CYPIPE_EP1));
-#endif // __ARMCC_VERSION
-
     Cy_IPC_Pipe_Init(&systemIpcPipe2ConfigCm33); /* PIPE-2 EP1 <--> EP2 */
 
     Cy_SysInt_Init(&ipcWakeIntConfig, wakeup_cm33_lock_deepsleep);
@@ -235,8 +220,6 @@ void ipc_pipe_cm33ns_cm55(void)
         CM33_WAKEUP_IPC_CH_MASK2);
     NVIC_EnableIRQ(CY_IPC_INTR_MUX(CM33_WAKEUP_IPC_INTR_NUM2));
 
-    
-    app_log_print("\r ============================END============================== \r\n");
 }
 
 /*******************************************************************************

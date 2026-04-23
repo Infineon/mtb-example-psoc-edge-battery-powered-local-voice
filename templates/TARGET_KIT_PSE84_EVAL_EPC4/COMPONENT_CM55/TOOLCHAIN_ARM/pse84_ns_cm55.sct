@@ -107,31 +107,45 @@ LR_XIP_PORT0 (CYMEM_CM55_0_m55_nvm_sel_START + MCUBOOT_HEADER_SIZE) (CYMEM_CM55_
     
     *abstraction-rtos*.* (+RO)
 ; Libraries 
-    *sp_enh* (+RO +RW +ZI)
+    *sp_enh* (+RO, +RW, +ZI)
+    *libusbd_base_d_cm55f_armc6* (+RO, +RW, +ZI)
+    *libusbd_base_r_cm55f_armc6* (+RO, +RW, +ZI)
     *ifx_va* (+RO, +RW, +ZI)
-    *libnlu* (+RO, +RW, +ZI)
-    *libwwd* (+RO, +RW, +ZI)
-
     ; Battery Powered application 
     *battery_powered_app_hp* (+RO)
     *battery_powered_svc_hp* (+RO)
-    
+   
     ; Inferencing
+    *battery_powered_inferencing* (+RO)
     *inferencing_interface* (+RO)
     *va_inferencing* (+RO)
     *voice_assistant* (+RO)
 
     ; Audio Enhancement
     *audio_enhancement* (+RO)
-    *audio_enhancement_interface* (+RO)
+    *battery_powered_ae_interface* (+RO)
     
     ; Use-case
     
    
     ;Middleware, Software, Modules
     *app_logger* (+RO)
+    *pdm_mic_interface* (+RO)
+    
+    *audio_usb_send_utils* (+RO)
+    *audio_send_task* (+RO)
+    *audio_receive_task* (+RO)
+    *audio_app* (+RO)
+    *usb_audio_interface* (+RO)
     
     *audio_conv_utils* (+RO)
+    
+    *i2s_playback* (+RO)
+    *mtb_tlv320dac3100* (+RO)
+    
+    *user_interaction* (+RO)
+    *button_press* (+RO)
+    *profiler* (+RO)
     
     *cy_retarget_io* (+RO)
     *cy_afe_audio_process* (+RO)
@@ -154,6 +168,14 @@ LR_XIP_PORT0 (CYMEM_CM55_0_m55_nvm_sel_START + MCUBOOT_HEADER_SIZE) (CYMEM_CM55_
 
     *cy_arm_freertos* (+RO)
     *cyhal_uart* (+RO)
+    
+    *cyhal_i2s* (+RO)
+    *usbd_config* (+RO)
+    *usbd_config_io* (+RO)
+    *usbd_os_abs_rtos* (+RO)
+    *cyhal_pdmpcm* (+RO)
+    *cy_pdm_pcm_v2* (+RO)
+    *cyhal_audio_common* (+RO)
     *(.itcm_data)
   }
 
@@ -176,6 +198,7 @@ LR_XIP_PORT0 (CYMEM_CM55_0_m55_nvm_sel_START + MCUBOOT_HEADER_SIZE) (CYMEM_CM55_
   /* A section for initialized data in SOC memory */
   cy_socmem_data CYMEM_CM55_0_m55_data_secondary_START CYMEM_CM55_0_m55_data_secondary_SIZE
   {
+    .ANY (+RO-DATA)
     *(.cy_socmem_data)
     *(.wwd_nlu_data0)
     *(.wwd_nlu_data1)
@@ -184,8 +207,6 @@ LR_XIP_PORT0 (CYMEM_CM55_0_m55_nvm_sel_START + MCUBOOT_HEADER_SIZE) (CYMEM_CM55_
     *(.wwd_nlu_data4)
     *(.wwd_nlu_data5)
     *(.wwd_nlu_data6)
-    *(.bss)
-    *(.bss.*)
   }
 
   /* A region for shared RAM memory where only the Cortex-M55 can allocate data but all cores can access*/
@@ -229,12 +250,12 @@ LR_DTCM CYMEM_CM55_0_m55_data_INTERNAL_START CYMEM_CM55_0_m55_data_SIZE
     *(.bss.noinit)
   }
 
-  /* A section for non-initialized data memory 
+  /* A section for non-initialized data memory */
   bss +0 ALIGN 8 (CYMEM_CM55_0_m55_data_SIZE - AlignExpr(ImageLength(app_data_main), 8) - AlignExpr(ImageLength(noinit), 8))
   {
-    ;*(.bss)
-    ;*(.bss.*)
-  }*/
+    *(.bss)
+    *(.bss.*)
+  }
 
   /* A region for stack */
   ARM_LIB_STACK __STACK_TOP EMPTY -__STACK_SIZE

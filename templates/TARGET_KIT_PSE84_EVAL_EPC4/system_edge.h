@@ -79,7 +79,7 @@ typedef enum
 /** The Cortex-M55 application start address, corresponds to the location of the
  *  vector table. This is the default address in the case of main cm33_ns execution out of
  *  external flash. */
-#define CY_CM55_APP_BOOT_ADDR                         (0x60580400)
+#define CY_CM55_APP_BOOT_ADDR                         (0x60480400)
 #endif
 
 #if !defined (CY_CORTEX_M55_APPL_ADDR)

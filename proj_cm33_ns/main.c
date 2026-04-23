@@ -4,33 +4,33 @@
 * Description :
 *  main function for CM33 Non Secure application for Battery Powered Local Voice.
 ********************************************************************************
- * (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
- * Technologies AG. All rights reserved.
- * This software, associated documentation and materials ("Software") is
- * owned by Infineon Technologies AG or one of its affiliates ("Infineon")
- * and is protected by and subject to worldwide patent protection, worldwide
- * copyright laws, and international treaty provisions. Therefore, you may use
- * this Software only as provided in the license agreement accompanying the
- * software package from which you obtained this Software. If no license
- * agreement applies, then any use, reproduction, modification, translation, or
- * compilation of this Software is prohibited without the express written
- * permission of Infineon.
- *
- * Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
- * IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
- * THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
- * SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
- * Infineon reserves the right to make changes to the Software without notice.
- * You are responsible for properly designing, programming, and testing the
- * functionality and safety of your intended application of the Software, as
- * well as complying with any legal requirements related to its use. Infineon
- * does not guarantee that the Software will be free from intrusion, data theft
- * or loss, or other breaches ("Security Breaches"), and Infineon shall have
- * no liability arising out of any Security Breaches. Unless otherwise
- * explicitly approved by Infineon, the Software may not be used in any
- * application where a failure of the Product or any consequences of the use
- * thereof can reasonably be expected to result in personal injury.
+* (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
+* Technologies AG. All rights reserved.
+* This software, associated documentation and materials ("Software") is
+* owned by Infineon Technologies AG or one of its affiliates ("Infineon")
+* and is protected by and subject to worldwide patent protection, worldwide
+* copyright laws, and international treaty provisions. Therefore, you may use
+* this Software only as provided in the license agreement accompanying the
+* software package from which you obtained this Software. If no license
+* agreement applies, then any use, reproduction, modification, translation, or
+* compilation of this Software is prohibited without the express written
+* permission of Infineon.
+*
+* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+* INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
+* THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
+* SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
+* Infineon reserves the right to make changes to the Software without notice.
+* You are responsible for properly designing, programming, and testing the
+* functionality and safety of your intended application of the Software, as
+* well as complying with any legal requirements related to its use. Infineon
+* does not guarantee that the Software will be free from intrusion, data theft
+* or loss, or other breaches ("Security Breaches"), and Infineon shall have
+* no liability arising out of any Security Breaches. Unless otherwise
+* explicitly approved by Infineon, the Software may not be used in any
+* application where a failure of the Product or any consequences of the use
+* thereof can reasonably be expected to result in personal injury.
 *******************************************************************************/
 
 /*******************************************************************************
@@ -68,7 +68,7 @@
 #define APP_LPTIMER_INTERRUPT_PRIORITY      (1U)
 
 #ifdef LOW_POWER_MODE
-#define CM55_EXT_FLASH_START                (void*)(0x60580400)
+#define CM55_EXT_FLASH_START                (void*)(0x60480400)
 #define CM55_SOCMEM_START                   (void*)(CY_CM55_APP_BOOT_ADDR)
 #define CM55_IMAGE_SIZE                     (1940000)
 #define FIRST_LAUNCH_OF_CM55_ADDR           (0x240FEFF0)
@@ -105,7 +105,7 @@
 #define WAIT_TIME_AFTER_LICENSE_EXPIRE      (10U)
 
 /* Wait time after CM55 is booted */
-#define WAIT_TIME_AFTER_BOOT_CM55           (10U)
+#define WAIT_TIME_AFTER_BOOT_CM55           (20U)
 
 /* Time to check everytime if Cm55 is in deep sleep or not */
 #define GET_CM55_DEEP_SLEEP_STATUS_DELAY    (2U)
@@ -124,6 +124,8 @@ void app_retarget_io_init(void);
 static void handle_error(void);
 static void lptimer_interrupt_handler(void);
 static void setup_tickless_idle_timer(void);
+
+void vApplicationDaemonTaskStartupHook( void );
 
 #ifdef LOW_POWER_MODE
 static void disable_cm55_n_turn_off_pd1(void);
@@ -245,6 +247,26 @@ static void pd1_disable_task(void * arg)
 }
 #endif /* HP_INFERENCING_ENABLE */
 #endif /* LOW_POWER_MODE */
+
+/*******************************************************************************
+* Function Name: vApplicationDaemonTaskStartupHook
+********************************************************************************
+* Summary:
+*  This function will be called once when the Daemon/Timer task starts.
+*
+* Parameters:
+*  None
+*
+* Return:
+*  None
+*
+*******************************************************************************/
+void vApplicationDaemonTaskStartupHook( void )
+{
+    /* Secure stack allocation for the FreeRTOS timer task. */
+    portALLOCATE_SECURE_CONTEXT(2 * configMINIMAL_SECURE_STACK_SIZE);
+}
+
 /*******************************************************************************
 * Function Name: main
 ********************************************************************************
@@ -269,7 +291,7 @@ int main(void)
     /* Board init failed. Stop program execution */
     if (result != CY_RSLT_SUCCESS)
     {
-        app_log_print("Board initialization failed\r\n")
+        app_log_print("Board initialization failed\r\n");
         CY_ASSERT(0);
     }
 

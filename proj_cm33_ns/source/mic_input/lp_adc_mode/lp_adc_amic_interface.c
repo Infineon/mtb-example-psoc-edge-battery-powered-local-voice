@@ -1,39 +1,38 @@
-/*****************************************************************************
-* File Name        : main.c
-*
-* Description      : This source file contains the main routine for non-secure
-*                    application in the CM33 CPU
-*
-* Related Document : See README.md
-*
-*******************************************************************************
- * (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
- * Technologies AG. All rights reserved.
- * This software, associated documentation and materials ("Software") is
- * owned by Infineon Technologies AG or one of its affiliates ("Infineon")
- * and is protected by and subject to worldwide patent protection, worldwide
- * copyright laws, and international treaty provisions. Therefore, you may use
- * this Software only as provided in the license agreement accompanying the
- * software package from which you obtained this Software. If no license
- * agreement applies, then any use, reproduction, modification, translation, or
- * compilation of this Software is prohibited without the express written
- * permission of Infineon.
+/*******************************************************************************
+ * File Name:   lp_adc_amic_interface.c
  *
- * Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
- * IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
- * THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
- * SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
- * Infineon reserves the right to make changes to the Software without notice.
- * You are responsible for properly designing, programming, and testing the
- * functionality and safety of your intended application of the Software, as
- * well as complying with any legal requirements related to its use. Infineon
- * does not guarantee that the Software will be free from intrusion, data theft
- * or loss, or other breaches ("Security Breaches"), and Infineon shall have
- * no liability arising out of any Security Breaches. Unless otherwise
- * explicitly approved by Infineon, the Software may not be used in any
- * application where a failure of the Product or any consequences of the use
- * thereof can reasonably be expected to result in personal injury.
+ * Description: This file contains the low speed analog mic interface
+ *
+ * Related Document : See README.md
+ *
+*******************************************************************************
+* (c) 2026, Infineon Technologies AG, or an affiliate of Infineon
+* Technologies AG. All rights reserved.
+* This software, associated documentation and materials ("Software") is
+* owned by Infineon Technologies AG or one of its affiliates ("Infineon")
+* and is protected by and subject to worldwide patent protection, worldwide
+* copyright laws, and international treaty provisions. Therefore, you may use
+* this Software only as provided in the license agreement accompanying the
+* software package from which you obtained this Software. If no license
+* agreement applies, then any use, reproduction, modification, translation, or
+* compilation of this Software is prohibited without the express written
+* permission of Infineon.
+*
+* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+* INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
+* THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
+* SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
+* Infineon reserves the right to make changes to the Software without notice.
+* You are responsible for properly designing, programming, and testing the
+* functionality and safety of your intended application of the Software, as
+* well as complying with any legal requirements related to its use. Infineon
+* does not guarantee that the Software will be free from intrusion, data theft
+* or loss, or other breaches ("Security Breaches"), and Infineon shall have
+* no liability arising out of any Security Breaches. Unless otherwise
+* explicitly approved by Infineon, the Software may not be used in any
+* application where a failure of the Product or any consequences of the use
+* thereof can reasonably be expected to result in personal injury.
 *******************************************************************************/
 
 /*******************************************************************************
@@ -42,7 +41,7 @@
 #include "cy_pdl.h"
 #include "cybsp.h"
 #include "app_logger.h"
-#include "amic_interface.h"
+#include "lp_adc_amic_interface.h"
 #include "audio_input_configuration.h"
 
 #include "ppudbg.h"
@@ -56,22 +55,49 @@
 #define MIC_RX_SAMPLES_COUNT                            (160*MIC_MODE)
 
 /* Task Priority for Autonomous Analog FIFO */
-#define AUTONOMOUS_ANALOG_INTERRUPT_PRIORITY            (2U)
+#define AUTONOMOUS_ANALOG_INTERRUPT_PRIORITY            (3U)
 
 /*******************************************************************************
 * Global Variables
 *******************************************************************************/
 int32_t databuffer[256U];
 
-int16_t mic_audio_app_buffer_ping[MIC_RX_SAMPLES_COUNT] = {0};
-int16_t mic_audio_app_buffer_pong[MIC_RX_SAMPLES_COUNT] = {0};
-int16_t* ping_pong_local_pointer = NULL;
+extern int16_t mic_audio_app_buffer_ping[MIC_RX_SAMPLES_COUNT];
+extern int16_t mic_audio_app_buffer_pong[MIC_RX_SAMPLES_COUNT];
+extern int16_t* ping_pong_local_pointer;
 
-static uint32_t sod_to_add_timeout = 0;
 /*******************************************************************************
 * Functions Prototypes
 *******************************************************************************/
 extern void audio_mic_data_feed_cm33(int16_t *audio_data);
+
+void switch_to_lp_adc_AA_config()
+{
+    uint32_t status;
+    /* Deinitialize Low Power SAR ADC configuration of Autonomous Analog and Initialize High Speed SAR ADC configuration */
+    Cy_AutAnalog_Disable();
+    /* Switch back to low power ADC config of AA */
+    extern cy_rslt_t analog_mic_interface_init(void);
+    status = analog_mic_interface_init();
+    if(CY_AUTANALOG_SUCCESS != status)
+    {
+        app_log_print("Analog mic initialization failed\r\n");
+    }
+    else
+    {
+        #define AMIC_Timer             tcpwm_amic_timer_16kHz_HW, tcpwm_amic_timer_16kHz_NUM
+        #define AMIC_Timer_cfg         &tcpwm_amic_timer_16kHz_config
+        /* Disable the tcpwm while switching to low power ADC config of AA */
+        Cy_TCPWM_Counter_Disable(AMIC_Timer);
+        Cy_TCPWM_Counter_DeInit(AMIC_Timer, AMIC_Timer_cfg);
+        cy_svc_lp_low_noise_config_t aad_config;
+        aad_config.timeout_ms = SOD_TO_AAD_TIMEOUT_MS; //7 sec
+        aad_config.low_noise_threshold = SOD_TO_AAD_THRESHOLD;
+        aad_config.enable_feature = false;
+        cy_svc_lp_low_noise_config(&aad_config);
+        mtb_hal_syspm_unlock_deepsleep();
+    }
+}
 
 /*******************************************************************************
  * Function Name: analog_mic_interface_init
@@ -104,7 +130,7 @@ cy_rslt_t analog_mic_interface_init(void)
 * Function Name: analog_init
 ********************************************************************************
 * Summary:
-* Function to initialize the Autonomous Analog. 
+* Function to initialize the Autonomous Analog.
 *
 * Parameters:
 *  Result of Autonomous analog initialisation
@@ -143,7 +169,7 @@ cy_rslt_t analog_init(void)
 * Function Name: analog_fifo_isr
 ********************************************************************************
 * Summary:
-* Interrupt for analog fifo data. 
+* Interrupt for analog fifo data.
 *
 * Parameters:
 *  none
@@ -156,7 +182,6 @@ void analog_fifo_isr(void)
 {
     uint32_t intr_status;
     static bool ping_pong = true;
-    bool all_below_threshold = true;
 
     /* Read interrupt status register */
     intr_status = Cy_AutAnalog_FIFO_GetInterruptStatus(ANALOG_FIFO_IDX);
@@ -170,7 +195,7 @@ void analog_fifo_isr(void)
     /* Check FIFO0 interrupt */
     if ((intr_status & (uint32_t)(CY_AUTANALOG_INT_FIFO_LEVEL0)) != 0UL)
     {
-        uint16_t fifoSize = Cy_AutAnalog_FIFO_ReadData(ANALOG_FIFO_IDX, ANALOG_FIFO_BUF0_IDX, MIC_RX_SAMPLES_COUNT, databuffer);
+        Cy_AutAnalog_FIFO_ReadData(ANALOG_FIFO_IDX, ANALOG_FIFO_BUF0_IDX, MIC_RX_SAMPLES_COUNT, databuffer);
         if (ping_pong)
         {
             ping_pong_local_pointer = mic_audio_app_buffer_ping;
@@ -183,7 +208,7 @@ void analog_fifo_isr(void)
         for(uint8_t z = 0; z<MIC_RX_SAMPLES_COUNT; z++)
         {
             /* convert 32bit signed value representing 12bit ADC value into 16bit integer value */
-            *(ping_pong_local_pointer + z) = (int16_t)((*(databuffer + z))<<4); 
+            *(ping_pong_local_pointer + z) = (int16_t)((*(databuffer + z))<<4);
         }
         /* Copy data at ping_pong_local_pointer in to global buffer for dump */
         audio_mic_data_feed_cm33(ping_pong_local_pointer);
@@ -199,7 +224,7 @@ void analog_fifo_isr(void)
 * Function Name: analog_interrupt_init
 ********************************************************************************
 * Summary:
-* Function to init the analog interrupt routine. 
+* Function to init the analog interrupt routine.
 *
 * Parameters:
 *  none

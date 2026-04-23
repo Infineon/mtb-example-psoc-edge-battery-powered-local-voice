@@ -4,33 +4,33 @@
 * Description :
 * Code for DEEPCRAFT Voice Assistant (VA) inference processing
 ********************************************************************************
- * (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
- * Technologies AG. All rights reserved.
- * This software, associated documentation and materials ("Software") is
- * owned by Infineon Technologies AG or one of its affiliates ("Infineon")
- * and is protected by and subject to worldwide patent protection, worldwide
- * copyright laws, and international treaty provisions. Therefore, you may use
- * this Software only as provided in the license agreement accompanying the
- * software package from which you obtained this Software. If no license
- * agreement applies, then any use, reproduction, modification, translation, or
- * compilation of this Software is prohibited without the express written
- * permission of Infineon.
- *
- * Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
- * IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
- * THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
- * SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
- * Infineon reserves the right to make changes to the Software without notice.
- * You are responsible for properly designing, programming, and testing the
- * functionality and safety of your intended application of the Software, as
- * well as complying with any legal requirements related to its use. Infineon
- * does not guarantee that the Software will be free from intrusion, data theft
- * or loss, or other breaches ("Security Breaches"), and Infineon shall have
- * no liability arising out of any Security Breaches. Unless otherwise
- * explicitly approved by Infineon, the Software may not be used in any
- * application where a failure of the Product or any consequences of the use
- * thereof can reasonably be expected to result in personal injury.
+* (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
+* Technologies AG. All rights reserved.
+* This software, associated documentation and materials ("Software") is
+* owned by Infineon Technologies AG or one of its affiliates ("Infineon")
+* and is protected by and subject to worldwide patent protection, worldwide
+* copyright laws, and international treaty provisions. Therefore, you may use
+* this Software only as provided in the license agreement accompanying the
+* software package from which you obtained this Software. If no license
+* agreement applies, then any use, reproduction, modification, translation, or
+* compilation of this Software is prohibited without the express written
+* permission of Infineon.
+*
+* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+* INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
+* THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
+* SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
+* Infineon reserves the right to make changes to the Software without notice.
+* You are responsible for properly designing, programming, and testing the
+* functionality and safety of your intended application of the Software, as
+* well as complying with any legal requirements related to its use. Infineon
+* does not guarantee that the Software will be free from intrusion, data theft
+* or loss, or other breaches ("Security Breaches"), and Infineon shall have
+* no liability arising out of any Security Breaches. Unless otherwise
+* explicitly approved by Infineon, the Software may not be used in any
+* application where a failure of the Product or any consequences of the use
+* thereof can reasonably be expected to result in personal injury.
 *******************************************************************************/
 
 #include "va_inferencing.h"
@@ -39,6 +39,10 @@
 
 #define COMMAND_STRING_SIZE                     (250U)
 
+
+extern volatile bool ptt_flag;
+volatile bool ptt_control = false;
+char command_text[COMMAND_STRING_SIZE] = {0};
 
 /*******************************************************************************
  * Function Name: print_voice_assistant_status
@@ -58,7 +62,6 @@
  *******************************************************************************/
 void print_voice_assistant_status(cy_rslt_t result, va_event_t event, va_data_t *va_data)
 {
-    char command_text[COMMAND_STRING_SIZE] = {0};
 
     if ( result != VA_RSLT_SUCCESS )
     {
@@ -76,7 +79,7 @@ void print_voice_assistant_status(cy_rslt_t result, va_event_t event, va_data_t 
         }
         else if ( event == VA_EVENT_CMD_TIMEOUT /*|| event  == VA_EVENT_CMD_SILENCE_TIMEOUT*/)
         {
-            //  va_intent_to_id(INF_TIMEOUT);
+            //va_intent_to_id(INF_TIMEOUT);
         }
         else if ( event == VA_EVENT_CMD_SILENCE_TIMEOUT)
         {
@@ -86,7 +89,7 @@ void print_voice_assistant_status(cy_rslt_t result, va_event_t event, va_data_t 
         {
             if (CY_RSLT_SUCCESS == voice_assistant_get_command(command_text))
             {
-                //va_command_to_id(command_text);
+
             }
 
             if (va_data == NULL)
@@ -94,8 +97,6 @@ void print_voice_assistant_status(cy_rslt_t result, va_event_t event, va_data_t 
                 return;
             }
 
-
-            app_log_print("Intent name: %s \r\n", MTB_NLU_INTENT_NAME_LIST(PROJECT_PREFIX)[va_data->intent_index] );
 
 #ifdef VA_VARIABLE_ENABLE
             if (va_data->num_var != 0)
@@ -157,6 +158,8 @@ void run_voice_assistant_process(int16_t *audio_frame)
     va_event_t va_event = VA_NO_EVENT;
     /* Process the audio data */
     
+    va_ptt(ptt_flag);
+    
     va_result = voice_assistant_process(audio_frame, &va_event, &va_data);
     Cy_SysEnableU55(false);
 
@@ -165,54 +168,39 @@ void run_voice_assistant_process(int16_t *audio_frame)
 
 }
 
-
 /*******************************************************************************
-* Function Name: va_command_to_id
+* Function Name: va_ptt
 ********************************************************************************
 * Summary:
-*    Converts command to map id
+*    Push to Talk for Voice Assistant
+*
+* Parameters:
+*  ptt_flag - PTT Status flag.
+*
+* Return:
+*  None
+*
 *
 *******************************************************************************/
-void va_command_to_id (char *command)
+
+void va_ptt(volatile bool ptt_flag)
 {
-    int map_id=0;
-
-    if (!strcmp(command,INF_WAKE_WORD))
-    {
-        map_id = WAKEWORD_CMD_ID;
-    }
-    else if (!strcmp(command,INF_PLAY_MUSIC))
-    {
-        map_id = PLAY_MUSIC_CMD_ID;
-    }
-    else if (!strcmp(command,INF_STOP_MUSIC))
-    {
-        map_id = STOP_MUSIC_CMD_ID;
-    }
-    else if (!strcmp(command,INF_INCREASE_VOLUME))
-    {
-        map_id = INCREASE_VOL_CMD_ID;
-    }
-    else if (!strcmp(command,INF_DECREASE_VOLUME))
-    {
-        map_id = DECREASE_VOL_CMD_ID;
-    }
-    else if (!strcmp(command,INF_NEXT_TRACK))
-    {
-        map_id = NEXT_TRACK_CMD_ID;
-    }
-    else if (!strcmp(command,INF_PREVIOUS_TRACK))
-    {
-        map_id = PREVIOUS_TRACK_CMD_ID;
-    }
-    
-    else if (!strcmp(command, INF_TIMEOUT))
-    {
-        map_id = INFERENCING_TIMEOUT;
-    }
-
-    battery_powered_post_processing(map_id);
-
+	
+	if (ptt_control==true && ptt_flag == true)
+	{
+	    return;	
+	}
+	
+	if (ptt_flag == true && ptt_control == false)
+	{
+	    voice_assistant_change_state(VA_RUN_CMD);
+	    va_intent_to_id(INF_WAKE_WORD);
+	    ptt_control=true;
+	}
+	if (ptt_flag == false && ptt_control == true)
+	{
+		ptt_control=false;
+	}
 }
 
 /*******************************************************************************

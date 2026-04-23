@@ -1,9 +1,11 @@
 /*******************************************************************************
- * File Name: cy_fifo.h
- *
- * Description: Provides APIs for handling a FIFO in firmware.
- *
-*******************************************************************************
+* File Name        : main.c
+*
+* Description      : This is the source code for Bootloader Project.
+*
+* Related Document : See README.md
+*
+********************************************************************************
  * (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
  * Technologies AG. All rights reserved.
  * This software, associated documentation and materials ("Software") is
@@ -32,48 +34,56 @@
  * application where a failure of the Product or any consequences of the use
  * thereof can reasonably be expected to result in personal injury.
 *******************************************************************************/
-#ifndef CY_AMIC_INPUT_H
-#define CY_AMIC_INPUT_H
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
-#include "cybsp.h"
+/*******************************************************************************
+* Header Files
+*******************************************************************************/
 #include "cy_pdl.h"
-#include "mtb_hal.h"
+#include "cybsp.h"
+#include "mcuboot_bootloader.h"
 
+/*****************************************************************************
+* Function Name: main
+******************************************************************************
+* This is the main function for the bootloader application.
+*****************************************************************************/
+int main(void)
+{
+    cy_rslt_t result;
 
-/*******************************************************************************
-* Macros
-*******************************************************************************/
-#define ANALOG_SAR_IDX                      (0U)
-#define ANALOG_SAR_CH0_IDX                  (0U)
-#define ANALOG_FIFO_IDX                     (0U)
-#define ANALOG_FIFO_BUF0_IDX                (0U)
-#define ANALOG_FIFO_BUF1_IDX                (1U)
-#define FRAME_SIZE                          (160u)
-
-/*******************************************************************************
-* Global Variables
-*******************************************************************************/
-extern int32_t databuffer0[512U];
-extern volatile bool intr_fifo_flag;
-/*******************************************************************************
-* Function Prototypes
-*******************************************************************************/
-cy_rslt_t analog_init(void);
-void analog_interrupt_init(void);
-void analog_fifo_isr(void);
-cy_rslt_t analog_mic_interface_init(void);
-
-#if defined(__cplusplus)
-}
+    /* Create sharedmem_var variable in the CY_SECTION_SHAREDMEM_SEC 
+    to avoid increasing of RAM consumption with IAR compiler */
+#if defined (__ICCARM__)    
+    CY_SECTION_SHAREDMEM_SEC static volatile uint32_t sharedmem_var = 0;
+    Cy_SysLib_Delay(sharedmem_var);
 #endif
 
-#endif /* CY_AMIC_INPUT_H */
+    /* Set up internal routing, pins, and clock-to-peripheral connections */
+    result = cybsp_init();
 
+    /* Board initialization failed. Stop program execution */
+    if (CY_RSLT_SUCCESS != result)
+    {
+        /* Disable all interrupts. */
+        __disable_irq();
 
+        CY_ASSERT(0);
+        
+        /* Infinite loop */
+        while(true);
 
+    }
 
+    /* Enable global interrupts */
+    __enable_irq();
+
+    bootloader_init();
+    bootloader_run();
+
+    for (;;)
+    {
+    }
+}
+
+/* [] END OF FILE */
 

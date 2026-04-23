@@ -94,10 +94,17 @@ For more details, see the [ModusToolbox&trade; tools package user guide](https:/
 
 2. Open a terminal program and select the KitProg3 COM port. Set the serial port parameters to 8N1 and 115200 baud
 
-3. Set the following in the *common.mk* file:
+3. Set the following in the *common.mk* (either ARM or LLVM_ARM for TOOLCHAIN) file:
 
    ```
    TOOLCHAIN=ARM
+   CONFIG=Release
+   ```
+
+   or
+
+   ```
+   TOOLCHAIN=LLVM_ARM
    CONFIG=Release
    ```
 

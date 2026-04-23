@@ -55,7 +55,7 @@ VERBOSE=
 # ... then code in directories named COMPONENT_foo and COMPONENT_bar will be
 # added to the build
 #
-COMPONENTS += FREERTOS RTOS_AWARE  
+COMPONENTS += FREERTOS RTOS_AWARE
 
 # Like COMPONENTS, but disable optional code that was enabled by default.
 DISABLE_COMPONENTS+=
@@ -68,7 +68,7 @@ NPU=U55
 # tree for source code and builds it. The SOURCES variable can be used to
 # manually add source code to the build process from a location not searched
 # by default, or otherwise not found by the build system.
-SOURCES+= 
+SOURCES+=
 
 # Like SOURCES, but for include directories. Value should be paths to
 # directories (without a leading -I).
@@ -130,6 +130,11 @@ ifeq ($(CONFIG_OP_MODE),LOW_POWER)
     DEFINES +=LOW_POWER_MODE
     DEFINES+=ENABLE_LOW_POWER_SVC
 endif
+
+#For Profiler
+COMPONENTS += PROFILER
+DEFINES+=PROFILER_ENABLE
+
 
 #AFE configuration and related macros
 
@@ -199,13 +204,10 @@ ifeq ($(VA_LIB),Y)
     DEFINES+=PROJECT_PREFIX=$(DEEPCRAFT_PROJECT_NAME)
     DEFINES +=VA_VARIABLE_ENABLE
 endif
-    
+
 #Staged Voice Control Middleware on M55
 COMPONENTS += HP_APP_SVC
 DEFINES += ENABLE_SVC_HP_MW
-COMPONENTS += INTERCORE_PIPE
-DEFINES += INTERCORE_PIPE  
-
 
 ################################################################################
 # Paths
@@ -218,9 +220,9 @@ CY_APP_PATH=
 
 # Relative path to the shared repo location.
 #
-# All .mtb files have the format, <URI>#<COMMIT>#<LOCATION>. If the <LOCATION> field 
-# begins with $$ASSET_REPO$$, then the repo is deposited in the path specified by 
-# the CY_GETLIBS_SHARED_PATH variable. The default location is one directory level 
+# All .mtb files have the format, <URI>#<COMMIT>#<LOCATION>. If the <LOCATION> field
+# begins with $$ASSET_REPO$$, then the repo is deposited in the path specified by
+# the CY_GETLIBS_SHARED_PATH variable. The default location is one directory level
 # above the current app directory.
 # This is used with CY_GETLIBS_SHARED_NAME variable, which specifies the directory name.
 CY_GETLIBS_SHARED_PATH=../..

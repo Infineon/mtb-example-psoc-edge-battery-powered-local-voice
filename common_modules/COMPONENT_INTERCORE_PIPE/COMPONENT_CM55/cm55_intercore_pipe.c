@@ -5,33 +5,33 @@
 * Intercore IPC pipe on CM55 core for Staged Voice Control.
 *
 ********************************************************************************
- * (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
- * Technologies AG. All rights reserved.
- * This software, associated documentation and materials ("Software") is
- * owned by Infineon Technologies AG or one of its affiliates ("Infineon")
- * and is protected by and subject to worldwide patent protection, worldwide
- * copyright laws, and international treaty provisions. Therefore, you may use
- * this Software only as provided in the license agreement accompanying the
- * software package from which you obtained this Software. If no license
- * agreement applies, then any use, reproduction, modification, translation, or
- * compilation of this Software is prohibited without the express written
- * permission of Infineon.
- *
- * Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
- * IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
- * THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
- * SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
- * Infineon reserves the right to make changes to the Software without notice.
- * You are responsible for properly designing, programming, and testing the
- * functionality and safety of your intended application of the Software, as
- * well as complying with any legal requirements related to its use. Infineon
- * does not guarantee that the Software will be free from intrusion, data theft
- * or loss, or other breaches ("Security Breaches"), and Infineon shall have
- * no liability arising out of any Security Breaches. Unless otherwise
- * explicitly approved by Infineon, the Software may not be used in any
- * application where a failure of the Product or any consequences of the use
- * thereof can reasonably be expected to result in personal injury.
+* (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
+* Technologies AG. All rights reserved.
+* This software, associated documentation and materials ("Software") is
+* owned by Infineon Technologies AG or one of its affiliates ("Infineon")
+* and is protected by and subject to worldwide patent protection, worldwide
+* copyright laws, and international treaty provisions. Therefore, you may use
+* this Software only as provided in the license agreement accompanying the
+* software package from which you obtained this Software. If no license
+* agreement applies, then any use, reproduction, modification, translation, or
+* compilation of this Software is prohibited without the express written
+* permission of Infineon.
+*
+* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+* INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
+* THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
+* SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
+* Infineon reserves the right to make changes to the Software without notice.
+* You are responsible for properly designing, programming, and testing the
+* functionality and safety of your intended application of the Software, as
+* well as complying with any legal requirements related to its use. Infineon
+* does not guarantee that the Software will be free from intrusion, data theft
+* or loss, or other breaches ("Security Breaches"), and Infineon shall have
+* no liability arising out of any Security Breaches. Unless otherwise
+* explicitly approved by Infineon, the Software may not be used in any
+* application where a failure of the Product or any consequences of the use
+* thereof can reasonably be expected to result in personal injury.
 *******************************************************************************/
 
 /*******************************************************************************
@@ -143,31 +143,6 @@ void cy_svc_hp_ipc_post_recv_hook(void)
 }
 
 /*******************************************************************************
-* Function Name: Cy_SysIpc1PipeIsrCm55
-********************************************************************************
-* Summary:
-* This is the interrupt service routine for the system pipe.
-*
-* Parameters:
-*  None
-*
-* Return:
-*  None
-*
-*******************************************************************************/
-
-void Cy_SysIpc1PipeIsrCm55(void)
-{
-
-    Cy_SysLib_Delay(10);
-    app_log_print("IPC1: [CM55]EP[3] is interrupted \r\n");
-
-    Cy_SysLib_Delay(10);
-
-    Cy_IPC_Pipe_ExecuteCallback(CY_IPC_EP_CYPIPE_CM55_ADDR);
-}
-
-/*******************************************************************************
 * Function Name: Cy_SysIpcPipeIsrCm55
 ********************************************************************************
 * Summary:
@@ -214,8 +189,6 @@ void ipc_pipe_cm33ns_cm55(void)
 
     Cy_IPC_Pipe_Config(systemIpcPipeEpArray);
 
-    app_log_print("[CM55] IPC Application Main...\r\n");
-
     static cy_ipc_pipe_callback_ptr_t ep2CbArray[CY_IPC_CYPIPE_CLIENT_CNT]; /* CB Array for EP2 */
 
     /* Pipe-2 endpoint-1 and endpoint-2. CM55 <--> CM33 */
@@ -250,20 +223,8 @@ void ipc_pipe_cm33ns_cm55(void)
     /* .userPipeIsrHandler         */  &Cy_SysIpcPipeIsrCm55
     };
 
-#if defined (__ARMCC_VERSION)
-    app_log_print ("[CM55][EP2] IPC Channel-%d address[0x%x] Intr-%ld address[0x%x] \r\n", CY_IPC_CHAN_CYPIPE_EP2,
-                                                                                    (uint32_t)Cy_IPC_Drv_GetIpcBaseAddress(CY_IPC_CHAN_CYPIPE_EP2),
-                                                                                    (long)CY_IPC_INTR_CYPIPE_EP2,
-                                                                                    (uint32_t)Cy_IPC_Drv_GetIntrBaseAddr(CY_IPC_INTR_CYPIPE_EP2));
-#else
-    app_log_print ("[CM55][EP2] IPC Channel-%d address[0x%lx] Intr-%d address[0x%lx] \r\n", CY_IPC_CHAN_CYPIPE_EP2,
-                                                                                    (uint32_t)Cy_IPC_Drv_GetIpcBaseAddress(CY_IPC_CHAN_CYPIPE_EP2),
-                                                                                    CY_IPC_INTR_CYPIPE_EP2,
-                                                                                    (uint32_t)Cy_IPC_Drv_GetIntrBaseAddr(CY_IPC_INTR_CYPIPE_EP2));
-#endif // __ARMCC_VERSION
 
     Cy_IPC_Pipe_Init(&systemIpcPipe2ConfigCm55); /* PIPE-2 EP2 <--> EP1 */
-    app_log_print("\r ============================END============================== \r\n");
 
 }
 

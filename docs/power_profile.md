@@ -47,7 +47,7 @@ See **Table 1** for the power numbers of each stage with DEEPCRAFT&trade; Audio 
 
 Configuration | IBAT (uA) | VDDD + VDDIO (uA) | Total power (mW) | Description
 :-------- |:-------- | :----------  | :---------- | :--------
-Low Noise (AAD) | 49.15 | 35.92 | 0.227 | In quite scenario, the device will be in Acoustic Activity Detection (AAD) stage
+Low Noise (AAD) | 49.15 | 35.92 | 0.227 | In quiet scenario, the device will be in Acoustic Activity Detection (AAD) stage
 High Noise (SOD) | 88.13 | 56.88 | 0.393 | Seven seconds, if speech is not detected in seven seconds fallback to Acoustic Activity Detection (AAD) stage
 Wake Word (LPWWD) | 310 | 94.82 | 1.194 | Four seconds, if WWD is not detected in four seconds fallback to Speech Onset Detection (SOD) stage
 Natural Conversation (command/intent) | 5400 | 380 | 18.504 | Six-seconds frame count based on timeout of DEEPCRAFT&trade; Voice Assistant (VA) <br> if command/intent is not detected fallback to Speech Onset Detection (SOD) stage

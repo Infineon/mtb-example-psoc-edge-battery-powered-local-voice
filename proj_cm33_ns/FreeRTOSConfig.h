@@ -66,8 +66,8 @@ extern uint32_t SystemCoreClock;
 #define configTICK_RATE_HZ                      ((TickType_t ) 1000)
 #define configMAX_PRIORITIES                    7
 /* Increase the stack size to 256 to support ds-ram feature */
-#define configMINIMAL_STACK_SIZE                256
-#define configMINIMAL_SECURE_STACK_SIZE         256
+#define configMINIMAL_STACK_SIZE                2*256
+#define configMINIMAL_SECURE_STACK_SIZE         2*256
 #define configMAX_TASK_NAME_LEN                 16
 #define configUSE_16_BIT_TICKS                  0
 #define configIDLE_SHOULD_YIELD                 1
@@ -108,7 +108,7 @@ when application makefile has VFP_SELECT configured as softfloat */
 #define configUSE_TICK_HOOK                     0
 #define configCHECK_FOR_STACK_OVERFLOW          2
 #define configUSE_MALLOC_FAILED_HOOK            1
-#define configUSE_DAEMON_TASK_STARTUP_HOOK      0
+#define configUSE_DAEMON_TASK_STARTUP_HOOK      1
 
 /* Run time and task stats gathering related definitions. */
 #define configGENERATE_RUN_TIME_STATS           0

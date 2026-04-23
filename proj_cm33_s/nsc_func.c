@@ -153,6 +153,10 @@ void __attribute__((cmse_nonsecure_entry)) reapply_pd1_secure_configs(void)
             while(1);
         }
     }
+
+    /* Enables the PD1 Power Domain */
+    Cy_System_EnablePD1();
+
     /* Implemented the re-configuration as a loop, it could be individual calls */
     for (uint32_t index = 0; index < SIZEOFPPC1 ; index ++)
     {
@@ -163,11 +167,8 @@ void __attribute__((cmse_nonsecure_entry)) reapply_pd1_secure_configs(void)
             while(1);
         }
     }
-    
-    /* Enables the PD1 Power Domain */
-    Cy_System_EnablePD1_S();
-    
-    /* 
+
+    /*
     * Initialize the clock for the CY_MMIO_CM55_TCM peripheral group.
     * This sets up the necessary clock and peripheral routing to ensure
     * the CY_MMIO_CM55_TCM can be correctly accessed and utilized.

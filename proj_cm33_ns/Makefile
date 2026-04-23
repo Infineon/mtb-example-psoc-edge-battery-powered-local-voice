@@ -115,16 +115,8 @@ ifeq ($(CONFIG_OP_MODE),LOW_POWER)
     DEFINES+=ENABLE_LOW_POWER_SVC
 endif
 
-ifeq ($(CONFIG_INFERENCING_MODE),LPWWD_ONLY)
-    # Do Nothing
-endif
-
 ifeq ($(CONFIG_INFERENCING_MODE),HP_INFERENCING)
     DEFINES += HP_INFERENCING_ENABLE
-endif
-
-ifeq ($(CONFIG_INFERENCING_LIB),VOICE_ASSISTANT)
-    DEFINES += VA_INFERENCING
 endif
 
 DEFINES += CY_RETARGET_IO_CONVERT_LF_TO_CRLF
@@ -138,8 +130,6 @@ COMPONENTS += APP_LOGGER
 
 COMPONENTS += AUDIO_CONV_UTILS
 
-COMPONENTS += AUDIO_INPUT
-
 COMPONENTS += AUDIO_INPUT_CONFIGURATION
 
 ifeq ($(CONFIG_MIC_TYPE),AMIC)
@@ -151,25 +141,23 @@ COMPONENTS += INTERCORE_PIPE
 
 #FreeRTOS related defines.
 DEFINES += CY_RTOS_AWARE
-#Floating point selection.  
+#Floating point selection.
 VFP_SELECT = hardfp
 
-#Enable Staged Voice Control Middleware       
+#Enable Staged Voice Control Middleware
 DEFINES += ENABLE_SVC_LP_MW
 
 # Enable a specific wake word model by adding one of the following
 # Set model based on preferred wake word,
   # Select for ok Infineon
   COMPONENTS+=SVC_OK_INFINEON
-
-#Staged Voice Control Shared buffer configuration and IPC configuration    
-ENABLE_SVC_IPC_BY_PDL_PIPE=Y
-#Inter-process communication between Low Power Core and High Performance Core.
-ifeq ($(ENABLE_SVC_IPC_BY_PDL_PIPE), Y)
-#Inter-core pipe
-    COMPONENTS += INTERCORE_PIPE
-    DEFINES += INTERCORE_PIPE
-endif
+  # Select for ok Alexa
+#  COMPONENTS+=SVC_ALEXA
+  # Select for ok Hey Google
+#  COMPONENTS+=SVC_HEY_GOOGLE
+  # Select for Xiaodu Xiaodu
+#  COMPONENTS+=SVC_XIAODU_XIAODU
+# Note:- Only one of the above COMPONENTS should be enabled at a time to select the desired wake word model.
 
 DEFINES += SVC_SHARED_BUFFER_SECTION=1
 
@@ -177,35 +165,47 @@ DEFINES += SVC_SHARED_BUFFER_SECTION=1
 #    DEFINES += LPWWD_OVERRIDE #Override Low Power WakeWord
 
 #Low power wake word detection configuration
-DEFINES += EMBEDDED_DEV ENABLE_IFX_LPWWD 
-COMPONENTS += IFX_LPWWD ML_INT8x8 
+DEFINES += EMBEDDED_DEV ENABLE_IFX_LPWWD
+COMPONENTS += IFX_LPWWD ML_INT8x8
 DEFINES += TF_LITE_STATIC_MEMORY ML_INT8x8
+DEFINES += ENABLE_IFX_PRE_PROCESS_HPF
 
 DEFINES += ENABLE_SVC_ML_MW_SUPPORT
 
-#TensorFlowLite Micro Interpreter-Less mode.    
-ML_TFLM_MODE=ML_TFLM_LESS
+#TensorFlowLite Micro Interpreter-Less mode.
+COMPONENTS += ML_TFLM_LESS
+DEFINES += TF_LITE_STRIP_ERROR_STRINGS
+DEFINES += TF_LITE_MICRO_USE_OFFLINE_OP_USER_DATA
+NN_INFERENCE_ENGINE=tflm_less
+COMPONENTS += ML_T_LESS_NNL2
+INCLUDES+=$(SEARCH_cmsis)/COMPONENT_CMSIS_NN/Include
 
-ifeq ($(ML_TFLM_MODE),ML_TFLM_LESS)
-    COMPONENTS += ML_TFLM_LESS
-    DEFINES += TF_LITE_STRIP_ERROR_STRINGS
-    DEFINES += TF_LITE_MICRO_USE_OFFLINE_OP_USER_DATA
-    NN_INFERENCE_ENGINE=tflm_less
-    COMPONENTS += ML_T_LESS_NNL2
-    INCLUDES+=$(SEARCH_cmsis)/COMPONENT_CMSIS_NN/Include
-else
-    COMPONENTS += ML_TFLM
-    NN_INFERENCE_ENGINE=tflm
+###############################################################################
+# Wake word models can only be used with LPWWD_ONLY mode
+###############################################################################
+ifneq ($(filter SVC_XIAODU_XIAODU SVC_ALEXA SVC_HEY_GOOGLE,$(COMPONENTS)),)
+  ifneq ($(CONFIG_INFERENCING_MODE),LPWWD_ONLY)
+    $(error ERROR: Wake word models (SVC_XIAODU_XIAODU, SVC_ALEXA, SVC_HEY_GOOGLE) can only be used when CONFIG_INFERENCING_MODE=LPWWD_ONLY. Currently CONFIG_INFERENCING_MODE=$(CONFIG_INFERENCING_MODE))
+  endif
 endif
 
 # NN model name
 ifeq ($(filter SVC_OK_INFINEON,$(COMPONENTS)),SVC_OK_INFINEON)
     NN_MODEL_NAME=OK_INFINEON_INT8
 endif
+ifeq ($(filter SVC_ALEXA,$(COMPONENTS)),SVC_ALEXA)
+    NN_MODEL_NAME=ALEXA_INT8
+endif
+ifeq ($(filter SVC_HEY_GOOGLE,$(COMPONENTS)),SVC_HEY_GOOGLE)
+    NN_MODEL_NAME=HEY_GOOGLE_INT8
+endif
+ifeq ($(filter SVC_XIAODU_XIAODU,$(COMPONENTS)),SVC_XIAODU_XIAODU)
+    NN_MODEL_NAME=XIAODU_XIAODU_INT8
+endif
 
 NN_TYPE=int8x8
 DEFINES +=MODEL_NAME=$(NN_MODEL_NAME)
-   
+
 #To enable Tflitemicro operation with NNLITE mode,
 COMPONENTS += NNLITE2
 #For Speech Onset Detection
@@ -223,9 +223,9 @@ CY_APP_PATH=
 
 # Relative path to the shared repo location.
 #
-# All .mtb files have the format, <URI>#<COMMIT>#<LOCATION>. If the <LOCATION> field 
-# begins with $$ASSET_REPO$$, then the repo is deposited in the path specified by 
-# the CY_GETLIBS_SHARED_PATH variable. The default location is one directory level 
+# All .mtb files have the format, <URI>#<COMMIT>#<LOCATION>. If the <LOCATION> field
+# begins with $$ASSET_REPO$$, then the repo is deposited in the path specified by
+# the CY_GETLIBS_SHARED_PATH variable. The default location is one directory level
 # above the current app directory.
 # This is used with CY_GETLIBS_SHARED_NAME variable, which specifies the directory name.
 CY_GETLIBS_SHARED_PATH=../..

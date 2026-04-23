@@ -5,33 +5,33 @@
 * Description :
 * Code for audio feed into Staged Voice Control middleware
 ********************************************************************************
- * (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
- * Technologies AG. All rights reserved.
- * This software, associated documentation and materials ("Software") is
- * owned by Infineon Technologies AG or one of its affiliates ("Infineon")
- * and is protected by and subject to worldwide patent protection, worldwide
- * copyright laws, and international treaty provisions. Therefore, you may use
- * this Software only as provided in the license agreement accompanying the
- * software package from which you obtained this Software. If no license
- * agreement applies, then any use, reproduction, modification, translation, or
- * compilation of this Software is prohibited without the express written
- * permission of Infineon.
- *
- * Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
- * IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
- * THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
- * SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
- * Infineon reserves the right to make changes to the Software without notice.
- * You are responsible for properly designing, programming, and testing the
- * functionality and safety of your intended application of the Software, as
- * well as complying with any legal requirements related to its use. Infineon
- * does not guarantee that the Software will be free from intrusion, data theft
- * or loss, or other breaches ("Security Breaches"), and Infineon shall have
- * no liability arising out of any Security Breaches. Unless otherwise
- * explicitly approved by Infineon, the Software may not be used in any
- * application where a failure of the Product or any consequences of the use
- * thereof can reasonably be expected to result in personal injury.
+* (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
+* Technologies AG. All rights reserved.
+* This software, associated documentation and materials ("Software") is
+* owned by Infineon Technologies AG or one of its affiliates ("Infineon")
+* and is protected by and subject to worldwide patent protection, worldwide
+* copyright laws, and international treaty provisions. Therefore, you may use
+* this Software only as provided in the license agreement accompanying the
+* software package from which you obtained this Software. If no license
+* agreement applies, then any use, reproduction, modification, translation, or
+* compilation of this Software is prohibited without the express written
+* permission of Infineon.
+*
+* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+* INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
+* THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
+* SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
+* Infineon reserves the right to make changes to the Software without notice.
+* You are responsible for properly designing, programming, and testing the
+* functionality and safety of your intended application of the Software, as
+* well as complying with any legal requirements related to its use. Infineon
+* does not guarantee that the Software will be free from intrusion, data theft
+* or loss, or other breaches ("Security Breaches"), and Infineon shall have
+* no liability arising out of any Security Breaches. Unless otherwise
+* explicitly approved by Infineon, the Software may not be used in any
+* application where a failure of the Product or any consequences of the use
+* thereof can reasonably be expected to result in personal injury.
 *******************************************************************************/
 
 /*******************************************************************************
@@ -41,6 +41,8 @@
 #include "audio_feed_to_svc.h"
 
 #include "audio_conv_utils.h"
+#include "cy_scb_uart.h"
+#include "user_interaction.h"
 #include "cy_staged_voice_control.h"
 #include "cy_staged_voice_control_common.h"
 #include "cycfg_pins.h"
@@ -50,6 +52,8 @@
 #include "audio_input_configuration.h"
 #include "intercore_ipc.h"
 
+#include "hs_adc_amic_interface.h"
+#include "lp_adc_amic_interface.h"
 #include "nsc_func.h"
 #include "cy_syspm_pdcm.h"
 #include "cy_smif_memslot.h"
@@ -58,6 +62,8 @@
 #include "aad.h"
 
 #include "mtb_hal.h"
+#include "FreeRTOS.h"
+#include "task.h"
 /*******************************************************************************
 * Macros
 *******************************************************************************/
@@ -70,11 +76,12 @@
 #define APP_CFG_MAX_SHARED_BUF_SIZE                     (APP_INTER_CORE_BUF_SIZE)
 
 #define LPWWD_DETECT_FRAME                              (200u)
-#define SOD_HIT_DELAY                                   (500u)
+#define SOD_HIT_DELAY                                   (650u)
 #define SOD_SENSITIVITY                                 (16384u)
+#define STREAMING_TOGGLE_GUARD_MS                       (800u)
 
 #ifdef LOW_POWER_MODE
-#define CM55_EXT_FLASH_START                            (void*)(0x60580400)
+#define CM55_EXT_FLASH_START                            (void*)(0x60480400)
 #define CM55_SOCMEM_START                               (void*)(CY_CM55_APP_BOOT_ADDR)
 #define CM55_IMAGE_SIZE                                 (1940000)
 
@@ -84,6 +91,9 @@
 #endif /* LOW_POWER_MODE */
 
 #define CM55_DEEPSLEEP_FLAG_ADDRESS                     (0x240FEFF4)
+#ifdef HP_INFERENCING_ENABLE
+#define SVC_LP_SECURE_STACK_SIZE                        (2*configMINIMAL_SECURE_STACK_SIZE)
+#endif /* HP_INFERENCING_ENABLE */
 /*******************************************************************************
 * Global Variables
 *******************************************************************************/
@@ -101,12 +111,18 @@ typedef enum
     QSPI = 0,
     OSPI = 1
 }en_ext_mem_t;
-#else 
+#else
 unsigned char app_data_shared_socmem[APP_CFG_MAX_SHARED_BUF_SIZE] __attribute__((section(".cy_shared_socmem")));
 #endif
 
-static bool config_secure_stack_once = true;
+volatile bool button_pressed = false;
+/* Shared streaming mode flag address - accessible by both CM33 and CM55 */
+#define CM55_STREAMING_MODE_FLAG_ADDRESS                (0x240FEFF5)
+/* Pointer to streaming mode flag in shared memory (0/1): true when LP WWD is bypassed
+ * and CM55 is handling HP WWD + ASR. PTT (BTN1) is disabled while this flag is set. */
+volatile uint8_t *cm55_streaming_mode_active = (uint8_t *)CM55_STREAMING_MODE_FLAG_ADDRESS;
 volatile uint8_t *cm55_deepsleep_flag = (uint8_t *)CM55_DEEPSLEEP_FLAG_ADDRESS; // Define the pointer to the memory address
+static TickType_t s_last_streaming_toggle_tick = 0u;
 extern volatile uint8_t disable_cm55_n_turn_off_pd1_flag;
 extern volatile uint8_t asr_detected_indication_flag;
 extern TaskHandle_t pd1_disable_task_handle;
@@ -115,13 +131,17 @@ extern TaskHandle_t pd1_disable_task_handle;
 *******************************************************************************/
 
 extern const char* svc_lp_events_to_printable_string(cy_svc_event_t event);
-#ifdef INTERCORE_PIPE
 extern void app_ipc_init_cm33(void);
-#endif /* INTERCORE_PIPE */
 
 #ifdef ENABLE_LOW_POWER_SVC
 static cy_en_smif_status_t external_memory_init(en_ext_mem_t interface);
 #endif /* ENABLE_LOW_POWER_SVC */
+
+#ifdef HP_INFERENCING_ENABLE
+/* Forward declarations for streaming mode functions */
+static void app_svc_streaming_toggle_cb(void);
+static void app_streaming_toggle_cm33_init(cb_user_action user_action_cb);
+#endif /* HP_INFERENCING_ENABLE */
 /*******************************************************************************
 * Function Name: audio_mic_data_feed_cm33
 ********************************************************************************
@@ -169,15 +189,25 @@ cy_rslt_t svc_lp_event_handler(
     {
         case CY_SVC_EVENT_SPEECH_ONSET_DETECTED:
         {
-            app_log_print("\r\nSpeech Onset Detection detected speech \r\n");
+            if (*cm55_streaming_mode_active != 0u)
+            {
+                break;
+            }
+            app_log_print("\r\nSpeech Onset Detection detected speech on Low Power Core CM33\r\n");
             break;
         }
         case CY_SVC_EVENT_LOW_POWER_WAKEUP_WORD_DETECTED:
         {
-            app_log_print("Wake Word detected in Low Power Core CM33 \r\n");
+            if (*cm55_streaming_mode_active != 0u)
+            {
+                /* LPWWD is bypassed in streaming mode; ignore LP detection events. */
+                Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_ON);
+                break;
+            }
+            app_log_print("Wake Word detected on Low Power Core CM33\r\n");
         #ifdef HP_INFERENCING_ENABLE
             Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_ON);
-            app_log_print("***********Enabling Power Domain 1*************\n\r")
+            app_log_print("Enabling Power Domain 1 and High Performance Core CM55\r\n");
             vTaskResume(pd1_disable_task_handle);
             /* Used for debug of CM55 deepsleep across PD1 power cycles */
             Enable_pd1_n_relaunch_cm55();
@@ -188,43 +218,177 @@ cy_rslt_t svc_lp_event_handler(
         }
         case CY_SVC_EVENT_LOW_POWER_WAKEUP_WORD_NOT_DETECTED:
         {
-            app_log_print("Wake Word not detected in Low Power Core CM33 \r\n");
-            app_log_print("Waiting for Wake Word \r\n");
+            if (*cm55_streaming_mode_active != 0u)
+            {
+                /* LPWWD is bypassed in streaming mode; keep LP indicator ON. */
+                Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_ON);
+                break;
+            }
+            app_log_print("Wake Word not detected on Low Power Core CM33\r\n");
             Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_OFF);
             break;
         }
         case CY_SVC_EVENT_HIGH_PERFORMANCE_WAKEUP_WORD_DETECTED:
         {
+            if (!button_pressed)
+            {
+                app_log_print("Wake Word detected on High Performance Core CM55\r\n");
+            }
             Cy_GPIO_Write(CYBSP_LED_GREEN_PORT, CYBSP_LED_GREEN_PIN, CYBSP_LED_STATE_ON);
             break;
         }
         case CY_SVC_EVENT_HIGH_PERFORMANCE_WAKEUP_WORD_NOT_DETECTED:
         {
-            Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_OFF);
-            Cy_GPIO_Write(CYBSP_LED_GREEN_PORT, CYBSP_LED_GREEN_PIN, CYBSP_LED_STATE_OFF);
-            app_log_print("Waiting for Wake Word \r\n");
-            disable_cm55_n_turn_off_pd1_flag = true;
+            if (*cm55_streaming_mode_active != 0u)
+            {
+                /* LPWWD is bypassed in streaming mode: keep LP indicator ON */
+                Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_ON);
+                Cy_GPIO_Write(CYBSP_LED_GREEN_PORT, CYBSP_LED_GREEN_PIN, CYBSP_LED_STATE_OFF);
+                /* Streaming: CM55 manages HPWWD internally. Do NOT call
+                 * cy_svc_lp_set_stage() here — it is synchronous and would
+                 * deadlock the SVC task (this callback runs inside it).
+                 * SVC stays in its current stage; audio pipeline is still active. */
+                app_log_print("Streaming mode: HP WWD not detected, CM55 restarting internally\r\n");
+            }
+            else
+            {
+                Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_OFF);
+                Cy_GPIO_Write(CYBSP_LED_GREEN_PORT, CYBSP_LED_GREEN_PIN, CYBSP_LED_STATE_OFF);
+                disable_cm55_n_turn_off_pd1_flag = true;
+                button_pressed = false;
+                app_log_print("Wake Word not detected on High Performance Core CM55 - Timeout\r\n");
+                app_log_print("Disabling Power Domain 1 and High Performance Core CM55 for low power, switching back to Low Power Core CM33.\r\n");
+                app_log_print("******************     Battery Powered Local Voice     ******************\r\n\n");
+                app_log_print("Wake word: Okay Infineon\r\n");
+                app_log_print("Commands:\r\n"
+                    "    Start music\r\n"
+                    "    Next track\r\n"
+                    "    Previous track\r\n"
+                    "    End music\r\n"
+                    "    Pause music \r\n"
+                    "    Raise volume\r\n"
+                    "    Lower volume\r\n"
+
+                    "Additional intents for the commands: [Optional word] {one of required words} \t --> Matching commands\r\n"
+                    "[can you] {play/start} [the] {music/track}  \t--> Play music \r\n"
+                    "[can you] {end} [the] {music/track}  \t--> Stop music \r\n"
+                    "[can you] {pause} [the] {music/track}  \t--> Pause music \r\n"
+                    "[can you] [goto/switch to] {next} {track} \t--> Next track\r\n"
+                    "[can you] [goto/switch to] {previous} {track} \t--> Previous track\r\n"
+                    "[can you] {raise} {volume} \t--> Raise volume\r\n"
+                    "[can you] {lower} {volume} \t--> Lower volume\r\n"
+                    );
+                app_log_print("waiting for wake word\r\n");
+            }
             break;
         }
         case CY_SVC_EVENT_ASR_DETECTED:
         {
             Cy_GPIO_Write(CYBSP_LED_BLUE_PORT, CYBSP_LED_BLUE_PIN, CYBSP_LED_STATE_ON);
+            if (*cm55_streaming_mode_active != 0u)
+            {
+                /* Streaming: CM55 skips ASR_PROCESSING_COMPLETED and
+                 * restarts HPWWD inference internally. Just set the VA
+                 * indication flag here. Do NOT call cy_svc_lp_set_stage()
+                 * — it would deadlock (this callback runs inside SVC task). */
+                asr_detected_indication_flag = true;
+                app_log_print("Streaming mode: ASR detected on CM55\r\n");
+                Cy_GPIO_Write(CYBSP_LED_BLUE_PORT, CYBSP_LED_BLUE_PIN, CYBSP_LED_STATE_OFF);
+            }
             break;
         }
         case CY_SVC_EVENT_ASR_NOT_DETECTED:
         {
-            Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_OFF);
-            Cy_GPIO_Write(CYBSP_LED_GREEN_PORT, CYBSP_LED_GREEN_PIN, CYBSP_LED_STATE_OFF);
-            Cy_GPIO_Write(CYBSP_LED_BLUE_PORT, CYBSP_LED_BLUE_PIN, CYBSP_LED_STATE_OFF);
-            disable_cm55_n_turn_off_pd1_flag = true;
-            app_log_print("Waiting for Wake Word \r\n");
+            if (*cm55_streaming_mode_active != 0u)
+            {
+                /* LPWWD is bypassed in streaming mode: keep LP indicator ON */
+                Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_ON);
+                Cy_GPIO_Write(CYBSP_LED_GREEN_PORT, CYBSP_LED_GREEN_PIN, CYBSP_LED_STATE_OFF);
+                Cy_GPIO_Write(CYBSP_LED_BLUE_PORT, CYBSP_LED_BLUE_PIN, CYBSP_LED_STATE_OFF);
+                /* Streaming: CM55 manages ASR internally. Do NOT call
+                 * cy_svc_lp_set_stage() — deadlock risk (this is SVC task context). */
+                app_log_print("Streaming mode: ASR not detected, CM55 restarting internally\r\n");
+            }
+            else
+            {
+                Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_OFF);
+                Cy_GPIO_Write(CYBSP_LED_GREEN_PORT, CYBSP_LED_GREEN_PIN, CYBSP_LED_STATE_OFF);
+                Cy_GPIO_Write(CYBSP_LED_BLUE_PORT, CYBSP_LED_BLUE_PIN, CYBSP_LED_STATE_OFF);
+                disable_cm55_n_turn_off_pd1_flag = true;
+                if (button_pressed == true)
+                {
+                    /* Switch to Low Power (LP) ADC Autonomous analog configuration */
+                    switch_to_lp_adc_AA_config();
+                }
+                button_pressed = false;
+                app_log_print("ASR command not detected on High Performance Core CM55\r\n");
+                app_log_print("Disabling Power Domain 1 and High Performance Core CM55 for low power, switching back to Low Power Core CM33.\r\n");
+                app_log_print("******************     Battery Powered Local Voice     ******************\r\n\n");
+                app_log_print("Wake word: Okay Infineon\r\n");
+                app_log_print("Commands:\r\n"
+                    "    Start music\r\n"
+                    "    Next track\r\n"
+                    "    Previous track\r\n"
+                    "    End music\r\n"
+                    "    Pause music \r\n"
+                    "    Raise volume\r\n"
+                    "    Lower volume\r\n"
+
+                    "Additional intents for the commands: [Optional word] {one of required words} \t --> Matching commands\r\n"
+                    "[can you] {play/start} [the] {music/track}  \t--> Play music \r\n"
+                    "[can you] {end} [the] {music/track}  \t--> Stop music \r\n"
+                    "[can you] {pause} [the] {music/track}  \t--> Pause music \r\n"
+                    "[can you] [goto/switch to] {next} {track} \t--> Next track\r\n"
+                    "[can you] [goto/switch to] {previous} {track} \t--> Previous track\r\n"
+                    "[can you] {raise} {volume} \t--> Raise volume\r\n"
+                    "[can you] {lower} {volume} \t--> Lower volume\r\n"
+                    );
+                app_log_print("waiting for wake word\r\n");
+            }
             break;
         }
         case CY_SVC_EVENT_ASR_PROCESSING_COMPLETED:
         {
             asr_detected_indication_flag = true;
-            disable_cm55_n_turn_off_pd1_flag = true;
-            app_log_print("Waiting for Wake Word \r\n");
+            if (*cm55_streaming_mode_active != 0u)
+            {
+                Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_ON);
+                /* Streaming: CM55 has already restarted HPWWD internally.
+                 * Do NOT call cy_svc_lp_set_stage() — deadlock risk. */
+                app_log_print("Streaming mode: ASR processing completed, CM55 cycling\r\n");
+            }
+            else
+            {
+                disable_cm55_n_turn_off_pd1_flag = true;
+                if (button_pressed == true)
+                {
+                    /* Switch to Low Power (LP) ADC Autonomous analog configuration */
+                    switch_to_lp_adc_AA_config();
+                }
+                button_pressed = false;
+                app_log_print("Disabling Power Domain 1 and High Performance Core CM55 for low power, switching back to Low Power Core CM33.\r\n");
+                app_log_print("******************     Battery Powered Local Voice     ******************\r\n\n");
+                app_log_print("Wake word: Okay Infineon\r\n");
+                app_log_print("Commands:\r\n"
+                    "    Start music\r\n"
+                    "    Next track\r\n"
+                    "    Previous track\r\n"
+                    "    End music\r\n"
+                    "    Pause music \r\n"
+                    "    Raise volume\r\n"
+                    "    Lower volume\r\n"
+
+                    "Additional intents for the commands: [Optional word] {one of required words} \t --> Matching commands\r\n"
+                    "[can you] {play/start} [the] {music/track}  \t--> Play music \r\n"
+                    "[can you] {end} [the] {music/track}  \t--> Stop music \r\n"
+                    "[can you] {pause} [the] {music/track}  \t--> Pause music \r\n"
+                    "[can you] [goto/switch to] {next} {track} \t--> Next track\r\n"
+                    "[can you] [goto/switch to] {previous} {track} \t--> Previous track\r\n"
+                    "[can you] {raise} {volume} \t--> Raise volume\r\n"
+                    "[can you] {lower} {volume} \t--> Lower volume\r\n"
+                    );
+                app_log_print("waiting for wake word\r\n");
+            }
             break;
         }
         case CY_SVC_EVENT_LOW_NOISE_DETECTED:
@@ -243,6 +407,181 @@ cy_rslt_t svc_lp_event_handler(
 
 #ifdef HP_INFERENCING_ENABLE
 /*******************************************************************************
+* Function Name: app_svc_user_action_cb
+********************************************************************************
+* Summary:
+* Callback for user button - Push to Talk - Goes to ASR detection state.
+*
+* Parameters:
+*  None
+*
+* Return:
+*  None
+*
+*******************************************************************************/
+
+void app_svc_user_action_cb(void)
+{
+    cy_svc_stage_t stage = CY_SVC_STAGE_UNKNOWN;
+    cy_svc_lp_get_current_stage(&stage);
+
+    /* PTT is suppressed while streaming mode is active */
+    if (*cm55_streaming_mode_active != 0u)
+    {
+        app_log_print("Push-To-Talk ignored: CM55 streaming mode is active\r\n");
+        return;
+    }
+
+    button_pressed = true;
+
+    app_log_print("Push-To-Talk : User button pressed - Waiting for ASR command\r\n");
+    /* Switch to High Speed (HS) ADC Autonomous analog configuration */
+    switch_to_hs_adc_AA_config();
+
+    svc_lp_event_handler(CY_SVC_EVENT_LOW_POWER_WAKEUP_WORD_DETECTED, NULL);
+    svc_lp_event_handler(CY_SVC_EVENT_HIGH_PERFORMANCE_WAKEUP_WORD_DETECTED, NULL);
+    cy_svc_lp_set_stage(CY_SVC_STAGE_WAITING_FOR_ASR_REQUEST_DETECT);
+
+}
+
+/*******************************************************************************
+* Function Name: app_svc_streaming_toggle_cb
+********************************************************************************
+* Summary:
+* Callback for User Button 2. Toggles the CM55 streaming state:
+*   - First press: bypass LP WWD, hand control to CM55 for HP WWD + ASR
+*                  (follows standard HP timeout). PTT is disabled.
+*   - Second press: abort streaming, restore LP WWD state.
+*
+* Parameters:
+*  None
+*
+* Return:
+*  None
+*
+*******************************************************************************/
+static void app_svc_streaming_toggle_cb(void)
+{
+    TickType_t current_tick = xTaskGetTickCount();
+
+    /* Ignore duplicate BTN2 callbacks generated by switch bounce/retrigger
+     * from a single physical press. */
+    if ((current_tick - s_last_streaming_toggle_tick) < pdMS_TO_TICKS(STREAMING_TOGGLE_GUARD_MS))
+    {
+        return;
+    }
+    s_last_streaming_toggle_tick = current_tick;
+
+    if (*cm55_streaming_mode_active == 0u)
+    {
+        /* ---- Enter streaming mode ---- */
+        button_pressed = false;
+
+        app_log_print("Streaming mode ON: LP WWD bypassed, CM55 listening for HP WWD\r\n");
+
+        /* Switch ADC to high-speed mode needed by CM55 */
+        switch_to_hs_adc_AA_config();
+
+        /* If PD1 is still powered from a previous CM55 cycle, wait for the
+         * shutdown to complete.  Calling Enable_pd1_n_relaunch_cm55() while
+         * PD1/CM55 is active would memcpy over running CM55 code. */
+        if (cy_pd_ppu_get_power_mode((struct ppu_v1_reg *)CY_PPU_PD1_BASE))
+        {
+            app_log_print("Waiting for previous CM55/PD1 cycle to shut down...\r\n");
+            while (cy_pd_ppu_get_power_mode((struct ppu_v1_reg *)CY_PPU_PD1_BASE))
+            {
+                vTaskDelay(pdMS_TO_TICKS(50));
+            }
+        }
+
+        /* Power up CM55/PD1 explicitly for streaming mode */
+        Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_ON);
+        app_log_print("Enabling Power Domain 1 and High Performance Core CM55 (streaming)\r\n");
+        /* Clear any stale shutdown request before resuming CM55/PD1 */
+        disable_cm55_n_turn_off_pd1_flag = false;
+        vTaskResume(pd1_disable_task_handle);
+        Enable_pd1_n_relaunch_cm55();
+
+        /* IMPORTANT: Set the streaming flag AFTER Enable_pd1_n_relaunch_cm55()
+         * because that function does a memcpy into SOCMEM which would overwrite
+         * the flag if it were set earlier. CM55 takes time to boot and init
+         * before it first reads this flag, so this ordering is safe. */
+        *cm55_streaming_mode_active = 1u;
+
+        /* Force SVC to ASR stage — the only stage accepted by set_stage().
+         * This starts the audio pipeline to CM55. CM55 internally starts in
+         * HPWWD inference and manages the HPWWD→ASR→HPWWD cycle on its own. */
+        cy_svc_lp_set_stage(CY_SVC_STAGE_WAITING_FOR_ASR_REQUEST_DETECT);
+        /* In streaming mode LPWWD is bypassed, keep LP indicator ON */
+        Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_ON);
+    }
+    else
+    {
+        /* ---- Exit streaming mode ---- */
+        *cm55_streaming_mode_active = 0u;
+        button_pressed = false;
+
+        app_log_print("Streaming mode OFF: returning to LP WWD\r\n");
+
+        /* Restore LP ADC configuration immediately.  Streaming ON switched
+         * to HS ADC which initialised a TCPWM timer.  If we don't de-init
+         * it here, the next streaming ON will try to Cy_TCPWM_Counter_Init
+         * on an already-running counter, hit CY_ASSERT(0) and hang.
+         * Switching back to LP ADC also properly unlocks deepsleep. */
+        switch_to_lp_adc_AA_config();
+
+        /* Turn off LEDs to indicate streaming ended */
+        Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_OFF);
+        Cy_GPIO_Write(CYBSP_LED_GREEN_PORT, CYBSP_LED_GREEN_PIN, CYBSP_LED_STATE_OFF);
+        Cy_GPIO_Write(CYBSP_LED_BLUE_PORT, CYBSP_LED_BLUE_PIN, CYBSP_LED_STATE_OFF);
+
+        /* CM55 will see streaming flag = 0 on its next timeout or ASR
+         * completion and will go to deepsleep normally.  The existing
+         * event handlers (HPWWD_NOT_DETECTED / ASR_NOT_DETECTED /
+         * ASR_PROCESSING_COMPLETED) with flag == 0 will then:
+         *   - signal pd1_disable_task
+         *   - set stage back to LPWWD */
+    }
+}
+
+/*******************************************************************************
+* Function Name: app_streaming_toggle_cm33_init
+********************************************************************************
+* Summary:
+* Register the streaming toggle callback on User Button 2.
+*
+* Parameters:
+*  user_action_cb - callback (typically app_svc_streaming_toggle_cb)
+*
+* Return:
+*  None
+*
+*******************************************************************************/
+static void app_streaming_toggle_cm33_init(cb_user_action user_action_cb)
+{
+    user_interaction_button2_register(user_action_cb);
+}
+
+/*******************************************************************************
+* Function Name: app_push_to_talk_cm33_init
+********************************************************************************
+* Summary:
+* Initialize user button and pass the callback.
+*
+* Parameters:
+*  user_action_cb - User Buttton callback
+*
+* Return:
+*  None
+*
+*******************************************************************************/
+
+void app_push_to_talk_cm33_init(cb_user_action user_action_cb)
+{
+    user_interaction_init(USER_INTERACTION_BUTTON,user_action_cb);
+}
+
+/*******************************************************************************
 * Function Name: Enable_pd1_n_relaunch_cm55
 ********************************************************************************
 * Summary:
@@ -250,36 +589,25 @@ cy_rslt_t svc_lp_event_handler(
 *
 * Parameters:
 *  None
-* 
+*
 * Return:
-*  None 
+*  None
 *
 *******************************************************************************/
 void Enable_pd1_n_relaunch_cm55(void)
 {
     cy_svc_lp_set_hp_core_info(CY_SVC_BEFORE_HP_CORE_ENABLE);
-    Cy_System_EnablePD1_NS();
-    if(config_secure_stack_once)
-    {
-        portALLOCATE_SECURE_CONTEXT(2*configMINIMAL_SECURE_STACK_SIZE);
-        config_secure_stack_once = false;
-    }
     /* Reapplying security protections for PD1 memories and peripherals */
     reapply_pd1_secure_configs();
-    
-    Cy_System_EnablePD1();
     /* Initialize External Memory */
-    cy_en_smif_status_t status = external_memory_init(QSPI);
-    Cy_System_EnablePD1();
+    external_memory_init(QSPI);
     /* Enable SOCMEM */
     Cy_SysEnableSOCMEM(true);
     /* Reapply socmem deepsleep mode */
     Cy_SysPm_SetSOCMEMDeepSleepMode(CY_SYSPM_MODE_DEEPSLEEP);
 
     /* Clear SYSCPU and APPCPU power domain dependency set by boot code */
-    cy_pd_pdcm_clear_dependency(CY_PD_PDCM_APPCPU, CY_PD_PDCM_SYSCPU);
     /* To allow APPCPU to go in Deepsleep, clear U55 dependency */
-    cy_pd_pdcm_clear_dependency(CY_PD_PDCM_APPCPU, CY_PD_PDCM_U55);
 
     /* Set IPC1 interrupt 13 and 14 mask */
     Cy_IPC_Drv_SetInterruptMask(
@@ -297,7 +625,6 @@ void Enable_pd1_n_relaunch_cm55(void)
 
     /* Copy CM55 image from ext. flash to SOCMEM */
     memcpy(CM55_SOCMEM_START, CM55_EXT_FLASH_START, CM55_IMAGE_SIZE);
-    app_log_print("\r*************Re-launching CM55*************\r\n");
     /* Relaunching CM55 on LP Wake Word Detection */
     Cy_SysEnableCM55(MXCM55, CY_CM55_APP_BOOT_ADDR, CM55_BOOT_WAIT_TIME_USEC);
 }
@@ -312,25 +639,23 @@ void Enable_pd1_n_relaunch_cm55(void)
 *  None
 *
 * Return:
-*  None  
+*  None
 *
 *******************************************************************************/
 void disable_cm55_n_turn_off_pd1_on_svc_event(void)
 {
     cy_svc_lp_set_hp_core_info(CY_SVC_BEFORE_HP_CORE_DISABLE);
     /* Check if CM55 is in CPU Deep sleep, then Turn OFF PD1 */
-    while((!Cy_SysPm_Cm55IsDeepSleep()) || (!(*cm55_deepsleep_flag))) 
-    { 
-        vTaskDelay(2);          
+    while((!Cy_SysPm_Cm55IsDeepSleep()) || (!(*cm55_deepsleep_flag)))
+    {
+        vTaskDelay(2);
     };
-    app_log_print("\n\r************* CM55 entered CPU Deep Sleep*************\r\n"); 
     /* Disable CM55 */
     Cy_SysDisableCM55();
     /* Disable SOCMEM */
     Cy_SysEnableSOCMEM(false);
-    /* Disable PD1. Comment below line to keep PD1 ON, uncomment to turn it OFF */ 
+    /* Disable PD1. Comment below line to keep PD1 ON, uncomment to turn it OFF */
     Cy_System_DisablePD1();
-    app_log_print("\n\r************* Power Domain 1 turned OFF *************\r\n");
     disable_cm55_n_turn_off_pd1_flag = true;
 }
 #endif /* HP_INFERENCING_ENABLE */
@@ -391,7 +716,6 @@ cy_rslt_t app_svc_alloc_memory(cy_svc_lp_mem_id_t mem_id,
           }
       }
 
-      app_log_print("Alloc: MEMID:%d, Addr:%p, Size:%ld", (int)mem_id, *buffer,(long)size);
 
       return ret_val;
 }
@@ -420,26 +744,24 @@ cy_rslt_t app_svc_free_memory(cy_svc_lp_mem_id_t mem_id,
 {
       cy_rslt_t  ret_val = CY_RSLT_SVC_GENERIC_ERROR;
 
-      if(NULL == buffer)
-      {
-          return ret_val;
-      }
-
       switch(mem_id)
       {
           case CY_SVC_MEM_ID_INTERCORE_SHARED_BUFFER:
           {
+              ret_val = CY_RSLT_SUCCESS;
               break;
           }
           default:
           {
-              free(buffer);
+              if (buffer != NULL)
+              {
+                  free(buffer);
+                  buffer = NULL;
+              }
               ret_val = CY_RSLT_SUCCESS;
               break;
           }
       }
-      buffer = NULL;
-      app_log_print("Free: MEMID:%d, Addr:%p",mem_id, buffer);
 
       return ret_val;
 }
@@ -463,9 +785,10 @@ cy_rslt_t app_init_svc(void)
     cy_rslt_t  ret_val = CY_RSLT_SVC_GENERIC_ERROR;
     cy_svc_lp_config_t init_svc = {0};
 
-#ifdef INTERCORE_PIPE
+    /* Default behavior after boot is regular LPWWD flow */
+    *cm55_streaming_mode_active = 0u;
+
     app_ipc_init_cm33();
-#endif /* INTERCORE_PIPE */
 
     init_svc.is_lpwwd_external = false;
 
@@ -480,7 +803,7 @@ cy_rslt_t app_init_svc(void)
     init_svc.sample_rate = CY_SVC_SAMPLE_RATE_16KHZ;
 
     init_svc.sod_onset_detect_max_late_hit_delay_ms = SOD_HIT_DELAY;
-    init_svc.sod_onset_gap_setting_ms = CY_SOD_ONSET_GAP_SETTING_400_MS;
+    init_svc.sod_onset_gap_setting_ms = CY_SOD_ONSET_GAP_SETTING_500_MS;
     init_svc.sod_sensitivity = SOD_SENSITIVITY;
 #ifndef ENABLE_LOW_POWER_SVC
     init_svc.ipc_communication_sync_sempahore = 0;
@@ -500,7 +823,7 @@ cy_rslt_t app_init_svc(void)
 #endif /* LPWWD_OVERRIDE */
 
 #ifdef HP_INFERENCING_ENABLE
-    init_svc.stage_config_list |= CY_SVC_ENABLE_HPWWD_STATE_TRANSITIONS;  
+    init_svc.stage_config_list |= CY_SVC_ENABLE_HPWWD_STATE_TRANSITIONS;
     init_svc.stage_config_list |= CY_SVC_ENABLE_ASR_STATE_TRANSITIONS;
 #endif /*HP_INFERENCING_ENABLE */
 
@@ -523,15 +846,23 @@ cy_rslt_t app_init_svc(void)
         app_log_print("Staged Voice Initialization failed");
         CY_ASSERT(0);
     }
-    else
-    {
-        app_log_print("Staged Voice Initialization success");
-    }
+    cy_svc_lp_gain_config_t gain_control;
+    gain_control.post_hpf_gain = POST_HPF_GAIN; // 1 - Near field, 3 - Far field
+    gain_control.sod_processing_gain = SOD_PROCESSING_GAIN; //1 - Near field, 3 - Far field
+    cy_svc_lp_gain_config(&gain_control);
+
     cy_svc_lp_low_noise_config_t aad_config;
     aad_config.timeout_ms = SOD_TO_AAD_TIMEOUT_MS; //7 sec
     aad_config.low_noise_threshold = SOD_TO_AAD_THRESHOLD;
-    aad_config.enable_feature = true;    
+    aad_config.enable_feature = true;
     cy_svc_lp_low_noise_config(&aad_config);
+#if AFE_INPUT_SOURCE==AFE_INPUT_SOURCE_MIC
+#ifdef HP_INFERENCING_ENABLE
+    app_push_to_talk_cm33_init(app_svc_user_action_cb);
+    /* Register BTN2 as streaming mode toggle */
+    app_streaming_toggle_cm33_init(app_svc_streaming_toggle_cb);
+#endif /* HP_INFERENCING_ENABLE */
+#endif /* AFE_INPUT_SOURCE_MIC */
     return ret_val;
 }
 
@@ -686,5 +1017,12 @@ static cy_en_smif_status_t external_memory_init(en_ext_mem_t mode)
     return smif_status;
 }
 #endif /* ENABLE_LOW_POWER_SVC */
+
+#ifdef HP_INFERENCING_ENABLE
+void cy_svc_lp_thread_start_hook(void)
+{
+    portALLOCATE_SECURE_CONTEXT(SVC_LP_SECURE_STACK_SIZE);
+}
+#endif /* HP_INFERENCING_ENABLE */
 
 /* [] END OF FILE */
