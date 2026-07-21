@@ -80,7 +80,6 @@ SOURCES=
 # directories (without a leading -I).
 INCLUDES=
 
-# Select softfp or hardfp floating point. Default is softfp.
 VFP_SELECT+=
 
 # Additional / custom C compiler flags.

@@ -418,5 +418,25 @@ void app_svc_hp_app_init(void)
     return;
 }
 
+/*******************************************************************************
+* Function Name: usb_mic_data_feed
+********************************************************************************
+* Summary:
+* USB Feed on CM55 (Not supported)
+*
+* Parameters:
+*  None
+*
+* Return:
+*  None
+*
+*******************************************************************************/
+
+void usb_mic_data_feed(int16_t *audio_data)
+{
+
+}
+
+
 /* [] END OF FILE */
 

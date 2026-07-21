@@ -66,6 +66,7 @@ Argument | Description | Required/optional
 
 After the project has been created, you can open it in your preferred development environment.
 
+> **Note:** This CE is supported only in Eclipse IDE and Visual Studio (VS) Code.
 
 <details><summary><b>Eclipse IDE</b></summary>
 
@@ -76,13 +77,17 @@ For more details, see the [Eclipse IDE for ModusToolbox&trade; user guide](https
 </details>
 
 
-<details><summary><b>Command line</b></summary>
+<details><summary><b>Visual Studio (VS) Code</b></summary>
+
+Launch VS Code manually, and then open the generated *{project-name}.code-workspace* file located in the project directory.
+
+For more details, see the [Visual Studio Code for ModusToolbox&trade; user guide](https://www.infineon.com/MTBVSCodeUserGuide) (locally available at *{ModusToolbox&trade; install directory}/docs_{version}/mt_vscode_user_guide.pdf*).
+
+</details>
 
 If you prefer to use the CLI, open the appropriate terminal, and navigate to the project directory. On Windows, use the command-line 'modus-shell' program; on Linux and macOS, you can use any terminal application. From there, you can run various `make` commands.
 
 For more details, see the [ModusToolbox&trade; tools package user guide](https://www.infineon.com/ModusToolboxUserGuide) (locally available at *{ModusToolbox&trade; install directory}/docs_{version}/mtb_user_guide.pdf*).
-
-</details>
 
 
 ### Build and program onto the target

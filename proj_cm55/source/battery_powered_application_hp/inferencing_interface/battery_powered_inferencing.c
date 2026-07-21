@@ -80,6 +80,7 @@
 * Global variables
 *****************************************************************************/
 volatile bool ptt_flag = false;
+volatile bool stream_flag = false;
 
 bool enable_stage1_timeout = true;
 bool enable_stage2_timeout = true;
@@ -89,7 +90,9 @@ cy_svc_stage_t g_cur_stage = CY_SVC_STAGE_INVALID;
 unsigned int frame_counter_on_streaming_state = 0;
 bool enabled_streaming_state = false;
 
+#if defined(PD1_POWER_CYCLE)
 volatile uint8_t *cm55_non_tickless_deepsleep_flag = (uint8_t *)CM55_NON_TICKLESS_DEEPSLEEP_FLAG_ADDRESS; // Define the pointer to the memory address
+#endif /* PD1_POWER_CYCLE */
 /* Shared streaming mode flag address - accessible by both CM33 and CM55 */
 #define CM55_STREAMING_MODE_FLAG_ADDRESS                (0x240FEFF5)
 /* Pointer to streaming mode flag in shared memory (0/1): when true, CM55 stays active for
@@ -164,11 +167,18 @@ void app_inferencing_callback(const char *function, char *message, char *paramet
         mtb_hal_syspm_lock_deepsleep();
         cy_svc_hp_set_state(CY_SVC_SET_STATE_HIGH_PERFORMANCE_WAKEUP_WORD_NOT_DETECTED, NULL);
         mtb_hal_syspm_unlock_deepsleep();
-        NVIC_DisableIRQ((IRQn_Type)m33syscpuss_interrupts_ipc_dpslp_6_IRQn);
-        NVIC_DisableIRQ((IRQn_Type)srss_interrupt_mcwdt_1_IRQn);
-        NVIC_DisableIRQ((IRQn_Type)mxu55_interrupt_npu_IRQn);
-        *cm55_non_tickless_deepsleep_flag = 1;
-        Cy_SysPm_CpuEnterDeepSleep(CY_SYSPM_WAIT_FOR_INTERRUPT);
+#ifdef PD1_POWER_CYCLE
+            NVIC_DisableIRQ((IRQn_Type)m33syscpuss_interrupts_ipc_dpslp_6_IRQn);
+            NVIC_DisableIRQ((IRQn_Type)srss_interrupt_mcwdt_1_IRQn);
+            NVIC_DisableIRQ((IRQn_Type)mxu55_interrupt_npu_IRQn);
+            *cm55_non_tickless_deepsleep_flag = 1;
+#endif /* PD1_POWER_CYCLE */   
+#if AE_APP_PROFILE
+            cy_profiler_deinit();
+#endif  
+#ifdef PD1_POWER_CYCLE
+            Cy_SysPm_CpuEnterDeepSleep(CY_SYSPM_WAIT_FOR_INTERRUPT);
+#endif /* PD1_POWER_CYCLE */    
     }
     return;
 }
@@ -307,12 +317,20 @@ void battery_powered_post_processing(int map_id)
                     app_log_print("Intent: Pause Music\n\r");
                 }
                 cy_svc_hp_set_state(CY_SVC_SET_STATE_ASR_PROCESSING_COMPLETED, NULL);
+                
                 mtb_hal_syspm_unlock_deepsleep();
-                NVIC_DisableIRQ((IRQn_Type)m33syscpuss_interrupts_ipc_dpslp_6_IRQn);
-                NVIC_DisableIRQ((IRQn_Type)srss_interrupt_mcwdt_1_IRQn);
-                NVIC_DisableIRQ((IRQn_Type)mxu55_interrupt_npu_IRQn);
-                *cm55_non_tickless_deepsleep_flag = 1;
-                Cy_SysPm_CpuEnterDeepSleep(CY_SYSPM_WAIT_FOR_INTERRUPT);
+#ifdef PD1_POWER_CYCLE
+            NVIC_DisableIRQ((IRQn_Type)m33syscpuss_interrupts_ipc_dpslp_6_IRQn);
+            NVIC_DisableIRQ((IRQn_Type)srss_interrupt_mcwdt_1_IRQn);
+            NVIC_DisableIRQ((IRQn_Type)mxu55_interrupt_npu_IRQn);
+            *cm55_non_tickless_deepsleep_flag = 1;
+#endif /* PD1_POWER_CYCLE */   
+#if AE_APP_PROFILE
+            cy_profiler_deinit();
+#endif  
+#ifdef PD1_POWER_CYCLE
+            Cy_SysPm_CpuEnterDeepSleep(CY_SYSPM_WAIT_FOR_INTERRUPT);
+#endif /* PD1_POWER_CYCLE */        
             }
             break;
         }
@@ -335,18 +353,34 @@ void battery_powered_post_processing(int map_id)
             else
             {
             mtb_hal_syspm_lock_deepsleep();
-            cy_svc_hp_set_state(CY_SVC_SET_STATE_ASR_NOT_DETECTED, NULL);
+            if (stream_flag==true) {
+                app_log_print("Exiting Streaming Mode from CM55 \r\n");
+                stream_flag=false;
+                cy_svc_hp_set_state(CY_SVC_SET_STATE_ASR_NOT_DETECTED, NULL);
+                cy_svc_hp_set_state(CY_SVC_SET_STATE_ASR_PROCESSING_COMPLETED, NULL);
+            } else {
+                app_log_print("ASR not detected \r\n");
+                cy_svc_hp_set_state(CY_SVC_SET_STATE_ASR_NOT_DETECTED, NULL);
+                cy_svc_hp_set_state(CY_SVC_SET_STATE_ASR_PROCESSING_COMPLETED, NULL);
+            }
+
             mtb_hal_syspm_unlock_deepsleep();
+
+#ifdef PD1_POWER_CYCLE
             NVIC_DisableIRQ((IRQn_Type)m33syscpuss_interrupts_ipc_dpslp_6_IRQn);
             NVIC_DisableIRQ((IRQn_Type)srss_interrupt_mcwdt_1_IRQn);
             NVIC_DisableIRQ((IRQn_Type)mxu55_interrupt_npu_IRQn);
             *cm55_non_tickless_deepsleep_flag = 1;
-            #if AE_APP_PROFILE
+#endif /* PD1_POWER_CYCLE  */            
+#if AE_APP_PROFILE
             cy_profiler_deinit();
-            #endif
+#endif
+#ifdef PD1_POWER_CYCLE
             Cy_SysPm_CpuEnterDeepSleep(CY_SYSPM_WAIT_FOR_INTERRUPT);
+#endif /* PD1_POWER_CYCLE */            
             }
         }
+        break;
     }
 }
 
@@ -425,21 +459,33 @@ void battery_powered_inference_feed(short *mono, cy_svc_buffer_info_t buffer_inf
     }
     if(CY_SVC_BUF_INFO_ASR_FORCE_START & buffer_info)
     {
-        /* In streaming mode, ignore ASR force-start - CM55 manages
-         * its own HPWWD -> ASR cycle internally. */
+        /* PTT (ASR force-start) should be processed in all modes - streaming or not.
+         * In streaming mode, the timeout behavior differs (restarts HPWWD instead of
+         * deep sleep), but PTT should still trigger ASR mode. */
+         
+         /* Both PTT and Streaming use the same SVC flag so setting the flow accordingly.*/
+        switch_to_asr_inferencing();
         if (*cm55_streaming_mode_active == 0u)
         {
-            switch_to_asr_inferencing();
             ptt_flag = true;
+        }else if (*cm55_streaming_mode_active == 1u)
+        {
+            stream_flag = true;
         }
+        
     }
     get_cur_svc_stage_and_force_model_stages();
     inference_processing((short *)mono, INFER_FRAME_SIZE/2);
-    inference_timeout_check();
-   /* if (true == enable_stage1_timeout && true == enable_stage2_timeout)
-    * {
-    *    inference_timeout_check();
-    * } */
+ /* Check for timeouts in LPWWD reverification and Streaming states*/   
+    if (*cm55_streaming_mode_active == 0u)
+    {
+        inference_timeout_check();
+        if (stream_flag==true)
+        {
+            battery_powered_post_processing(INFERENCING_TIMEOUT);
+        }
+    }
+
     return;
 }
 

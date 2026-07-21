@@ -111,6 +111,18 @@ LR_XIP_PORT0 (CYMEM_CM55_0_m55_nvm_sel_START + MCUBOOT_HEADER_SIZE) (CYMEM_CM55_
     *libusbd_base_d_cm55f_armc6* (+RO, +RW, +ZI)
     *libusbd_base_r_cm55f_armc6* (+RO, +RW, +ZI)
     *ifx_va* (+RO, +RW, +ZI)
+
+    ; ML inference (DSNS/AM LSTM runs on CM55 - keep in ITCM for low MCPS)
+    *arm_lstm* (+RO-CODE)
+    *arm_nn_lstm* (+RO-CODE)
+    *unidirectional_sequence_lstm* (+RO-CODE)
+    *ethosu_driver* (+RO-CODE)
+    *ethosu_device* (+RO-CODE)
+    *ethosu_pmu* (+RO-CODE)
+    *ethosu* (+RO-CODE)
+    *mtb_ml* (+RO-CODE)
+
+
     ; Battery Powered application 
     *battery_powered_app_hp* (+RO)
     *battery_powered_svc_hp* (+RO)
@@ -124,13 +136,13 @@ LR_XIP_PORT0 (CYMEM_CM55_0_m55_nvm_sel_START + MCUBOOT_HEADER_SIZE) (CYMEM_CM55_
     ; Audio Enhancement
     *audio_enhancement* (+RO)
     *battery_powered_ae_interface* (+RO)
+    *app_afe_tuner* (+RO)
     
     ; Use-case
     
    
     ;Middleware, Software, Modules
     *app_logger* (+RO)
-    *pdm_mic_interface* (+RO)
     
     *audio_usb_send_utils* (+RO)
     *audio_send_task* (+RO)
@@ -140,8 +152,7 @@ LR_XIP_PORT0 (CYMEM_CM55_0_m55_nvm_sel_START + MCUBOOT_HEADER_SIZE) (CYMEM_CM55_
     
     *audio_conv_utils* (+RO)
     
-    *i2s_playback* (+RO)
-    *mtb_tlv320dac3100* (+RO)
+
     
     *user_interaction* (+RO)
     *button_press* (+RO)
@@ -168,14 +179,6 @@ LR_XIP_PORT0 (CYMEM_CM55_0_m55_nvm_sel_START + MCUBOOT_HEADER_SIZE) (CYMEM_CM55_
 
     *cy_arm_freertos* (+RO)
     *cyhal_uart* (+RO)
-    
-    *cyhal_i2s* (+RO)
-    *usbd_config* (+RO)
-    *usbd_config_io* (+RO)
-    *usbd_os_abs_rtos* (+RO)
-    *cyhal_pdmpcm* (+RO)
-    *cy_pdm_pcm_v2* (+RO)
-    *cyhal_audio_common* (+RO)
     *(.itcm_data)
   }
 
@@ -216,10 +219,10 @@ LR_XIP_PORT0 (CYMEM_CM55_0_m55_nvm_sel_START + MCUBOOT_HEADER_SIZE) (CYMEM_CM55_
   }
 
   /* A region for the GPU buffer */
-  cy_gfx_mem CYMEM_CM55_0_gfx_mem_START CYMEM_CM55_0_gfx_mem_SIZE
+ /*  cy_gfx_mem CYMEM_CM55_0_gfx_mem_START CYMEM_CM55_0_gfx_mem_SIZE
   {
     *(.cy_gpu_buf)
-  }
+  } */
 
   /* A reserved region for the trail space for the signature used by the bootloader - do not place any code here */
   cy_trailer (CYMEM_CM55_0_m55_trailer_sel_START) EMPTY CYMEM_CM55_0_m55_trailer_SIZE

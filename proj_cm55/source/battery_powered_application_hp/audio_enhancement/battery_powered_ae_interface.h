@@ -43,6 +43,9 @@ extern "C" {
 #include "audio_enhancement.h"
 #include "cy_staged_voice_control_common.h"
 
+#include "FreeRTOS.h"
+#include "queue.h"
+
 #ifdef PROFILER_ENABLE
 #include "cy_afe_profiler.h"
 #include "cy_profiler.h"
@@ -67,11 +70,21 @@ extern "C" {
 #define INFERENCING_PROFILE                           (0)
 
 /*******************************************************************************
+* Extern Variables
+*******************************************************************************/
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+extern QueueHandle_t ae_usb_queue_handle;
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
+
+/*******************************************************************************
  * Function Prototypes
  *******************************************************************************/
 int battery_powered_ae_feed(void* audio_input, void* aec_buffer, cy_svc_buffer_info_t buffer_info);
 int battery_powered_ae_init(uint8_t channels);
 void license_limitation_exit();
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+void bplv_ae_usb_task(void *arg);
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
 
 #ifdef __cplusplus
 } /*extern "C" */

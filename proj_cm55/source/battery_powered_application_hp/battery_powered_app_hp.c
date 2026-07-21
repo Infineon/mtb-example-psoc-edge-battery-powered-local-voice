@@ -53,6 +53,11 @@
 
 #include "ppudbg.h"
 
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+#include "audio_usb_send_utils.h"
+#include "usb_audio_interface.h"
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
+
 /*******************************************************************************
 * Functions Prototypes
 *******************************************************************************/
@@ -65,6 +70,8 @@ extern void app_ipc_init_cm55(void);
 extern struct ethosu_driver ethosu_drv;
 #endif /* COMPONENT_U55 */
 #endif /* LOW_POWER_MODE */
+
+bool usb_streaming = false;
 /*******************************************************************************
 * Function Name: battery_powered_app_hp
 ********************************************************************************
@@ -95,6 +102,11 @@ void battery_powered_app_hp()
 #if !defined(VA_INFERENCING)
     app_log_print("Important: Voice Assistant Inferencing not enabled - Enable it for CE to work with all functionality. \r\n");
 #endif /* VA_INFERENCING */
+
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+    usb_audio_interface_init();
+    usb_send_out_dbg_init_channels();
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
 
 }
 /* [] END OF FILE */

@@ -43,8 +43,15 @@ extern "C" {
 /* Enable Battery Powered Local Voice Application */
 #define BATTERY_POWERED_LOCAL_VOICE_APP_ENABLE                       (1U)
 #if BATTERY_POWERED_LOCAL_VOICE_APP_ENABLE
+
+#ifdef USB_FEED_TO_SVC
+/* Disable Autonomous Analog */
+#define ENABLE_AUTONOMOUS_ANALOG                                     (0U)
+#else
 /* Enable Autonomous Analog */
 #define ENABLE_AUTONOMOUS_ANALOG                                     (1U)
+#endif /* USB_FEED_TO_SVC */
+
 #endif /* BATTERY_POWERED_LOCAL_VOICE_APP_ENABLE */
 
 int battery_powered_application_lp();

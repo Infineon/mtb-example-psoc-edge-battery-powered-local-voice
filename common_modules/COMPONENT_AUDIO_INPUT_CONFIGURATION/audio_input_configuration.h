@@ -41,13 +41,11 @@ extern "C" {
 
 #include "cy_afe_configurator_settings.h"
 
+#if AFE_INPUT_SOURCE == AFE_INPUT_SOURCE_MIC
 #if AFE_INPUT_NUMBER_CHANNELS == 2
 #error "AFE_INPUT_NUMBER_CHANNELS == 2 is not allowed. Compilation stopped."
 #endif /* AFE_INPUT_NUMBER_CHANNELS */
-
-#ifdef ENABLE_IFX_AEC
-#error "Acoustic Echo Cancellation (AEC) is enabled please disable it."
-#endif /* ENABLE_IFX_AEC */
+#endif /* AFE_INPUT_SOURCE */
 
 
 #if defined(__cplusplus)

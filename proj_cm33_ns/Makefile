@@ -55,6 +55,10 @@ VERBOSE=
 #
 COMPONENTS += FREERTOS RTOS_AWARE FREERTOS_TZ
 
+COMPONENTS += USB_AUDIO
+COMPONENTS += EMUSB PSE84
+COMPONENTS += USBD_BASE
+
 # Like COMPONENTS, but disable optional code that was enabled by default.
 DISABLE_COMPONENTS=
 
@@ -119,6 +123,10 @@ ifeq ($(CONFIG_INFERENCING_MODE),HP_INFERENCING)
     DEFINES += HP_INFERENCING_ENABLE
 endif
 
+ifeq ($(CONFIG_USB_STREAMING),CM33)
+    DEFINES+=USB_INPUT
+endif
+
 DEFINES += CY_RETARGET_IO_CONVERT_LF_TO_CRLF
 
 #CMSIS DSP for voice processing.
@@ -152,12 +160,16 @@ DEFINES += ENABLE_SVC_LP_MW
   # Select for ok Infineon
   COMPONENTS+=SVC_OK_INFINEON
   # Select for ok Alexa
-#  COMPONENTS+=SVC_ALEXA
+  #COMPONENTS+=SVC_ALEXA
   # Select for ok Hey Google
 #  COMPONENTS+=SVC_HEY_GOOGLE
   # Select for Xiaodu Xiaodu
-#  COMPONENTS+=SVC_XIAODU_XIAODU
+  #COMPONENTS+=SVC_XIAODU_XIAODU
 # Note:- Only one of the above COMPONENTS should be enabled at a time to select the desired wake word model.
+
+# To enable custom low power wake word model, define the below macro and provide the model in COMPONENT_CUSTOM_LPWWD. 
+# By default, the pre-trained wake word models provided by Infineon are used.
+#COMPONENTS += CUSTOM_LPWWD
 
 DEFINES += SVC_SHARED_BUFFER_SECTION=1
 
@@ -202,6 +214,10 @@ endif
 ifeq ($(filter SVC_XIAODU_XIAODU,$(COMPONENTS)),SVC_XIAODU_XIAODU)
     NN_MODEL_NAME=XIAODU_XIAODU_INT8
 endif
+ifeq ($(filter CUSTOM_LPWWD,$(COMPONENTS)),CUSTOM_LPWWD)
+    NN_MODEL_NAME=MY_LPWWD
+endif
+
 
 NN_TYPE=int8x8
 DEFINES +=MODEL_NAME=$(NN_MODEL_NAME)

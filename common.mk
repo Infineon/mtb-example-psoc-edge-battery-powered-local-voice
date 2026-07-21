@@ -34,17 +34,18 @@ TARGET=KIT_PSE84_EVAL_EPC2
 # Name of toolchain to use. Options include:
 # ARM      - Arm Compiler (must be installed separately).
 # LLVM_ARM - LLVM Embedded Toolchain (must be installed separately)
-TOOLCHAIN=ARM
+TOOLCHAIN=LLVM_ARM
 
 ifeq ($(TOOLCHAIN),ARM)
 #   Uncomment after importing the project or set this variable as env variable in the PC.
-#    For Eg) CY_COMPILER_ARM_DIR=C:/Program Files/ArmCompilerforEmbedded6.22
+#    CY_COMPILER_ARM_DIR=C:/Program Files/ArmCompilerforEmbedded6.22
 endif
 
 ifeq ($(TOOLCHAIN),LLVM_ARM)
 #   Uncomment after importing the project or set this variable as env variable in the PC.
-#    For Eg) CY_COMPILER_LLVM_ARM_DIR=C:/llvm/LLVM-ET-Arm-19.1.5-Windows-x86_64
+#   CY_COMPILER_LLVM_ARM_DIR=C:/llvm/LLVM-ET-Arm-19.1.5-Windows-x86_64
 endif
+
 
 # Toolchains supported by this code example. See README.md file.
 # This is used by automated build systems to identify the supported toolchains.
@@ -75,7 +76,6 @@ ifeq ($(TOOLCHAIN),ARM)
     CFLAGS+=
   endif
 endif
-
 
 # SRF disabled by default as NSC based calls used for secure access.
 DEFINES+=CY_SRF_DISABLE
@@ -122,7 +122,24 @@ CONFIG_OP_MODE=LOW_POWER
 CONFIG_INFERENCING_MODE=HP_INFERENCING
 
 
+##################### Enable USB on CM33 or CM55 #######################
+# CM33              - Enable USB streaming input on CM33, The audio input 
+#                     from USB Host (PC) is provided as input to the kit.
+# CM55              - Enable USB streaming on CM55, the audio from the kit
+#                     is streamed back to the USB host (PC) via USB.
+# NONE              - USB streaming is disabled.
+CONFIG_USB_STREAMING=NONE
+
+ifeq ($(CONFIG_USB_STREAMING),CM33)
+DEFINES += USB_FEED_TO_SVC
+endif
+
+
 #########################################################################################
+# Enable PD1 Power cycle only when USB streaming is disabled
+ifeq ($(CONFIG_USB_STREAMING),NONE)
+DEFINES+=PD1_POWER_CYCLE
+endif
 
 ##########################################################################################
 
@@ -142,7 +159,7 @@ SRAM_LOADING_WITH_EPB=TRUE
 #NOTE:Check the JSON file for the command parameters
 
 ifeq ($(SRAM_LOADING_WITH_EPB),TRUE)
-    COMBINE_SIGN_JSON=bsps/TARGET_$(TARGET)/config/GeneratedSource/boot_with_bldr.json
+  COMBINE_SIGN_JSON=bsps/TARGET_$(TARGET)/config/GeneratedSource/boot_with_bldr.json
 	DEFINES+=CY_CM33_NS_APP_BOOT_ADDR=0x24042400
 	DEFINES+=CY_CM55_APP_BOOT_ADDR=0x26311400
 

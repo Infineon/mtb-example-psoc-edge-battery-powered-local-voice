@@ -15,7 +15,7 @@
         "num_beams": 1
     },
     "dereverberation": {
-        "dereverberation_state": "on"
+        "dereverberation_state": "off"
     },
     "echo_suppression": {
         "echo_suppressor": "low",
@@ -37,7 +37,7 @@
         "software_input_gain_db2": 0
     },
     "lastSavedWith": "Audio Front-End Configurator",
-    "lastSavedWithVersion": "1.60.0",
+    "lastSavedWithVersion": "1.40.0",
     "noise_suppression": {
         "ns_db": 20,
         "ns_state": "on"
@@ -46,7 +46,7 @@
         "use_pc_speaker": "no",
         "use_target_speaker": "no"
     },
-    "toolsPackage": "DEEPCRAFT™ Audio Enhancement Tech Pack 1.1.0",
+    "toolsPackage": "DEEPCRAFT™ Audio Enhancement Tech Pack 1.2.0",
     "uart": {
         "baudrate": 115200,
         "data_bits": 8,
@@ -55,9 +55,9 @@
     },
     "usb": {
         "channel_0": "Input[0]",
-        "channel_1": "Output",
-        "channel_2": "AEC Ref",
-        "channel_3": "BF_Out"
+        "channel_1": "Input[1]",
+        "channel_2": "Output",
+        "channel_3": "AEC Ref"
     },
     "usb_output": {
         "outputchannel_0": "Speaker",

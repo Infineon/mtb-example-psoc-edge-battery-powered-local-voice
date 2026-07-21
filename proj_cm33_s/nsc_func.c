@@ -4,33 +4,34 @@
  * Description      : This file contains functions related to nsc.
  * 
  *******************************************************************************
- * (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
- * Technologies AG. All rights reserved.
- * This software, associated documentation and materials ("Software") is
- * owned by Infineon Technologies AG or one of its affiliates ("Infineon")
- * and is protected by and subject to worldwide patent protection, worldwide
- * copyright laws, and international treaty provisions. Therefore, you may use
- * this Software only as provided in the license agreement accompanying the
- * software package from which you obtained this Software. If no license
- * agreement applies, then any use, reproduction, modification, translation, or
- * compilation of this Software is prohibited without the express written
- * permission of Infineon.
- *
- * Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
- * IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
- * THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
- * SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
- * Infineon reserves the right to make changes to the Software without notice.
- * You are responsible for properly designing, programming, and testing the
- * functionality and safety of your intended application of the Software, as
- * well as complying with any legal requirements related to its use. Infineon
- * does not guarantee that the Software will be free from intrusion, data theft
- * or loss, or other breaches ("Security Breaches"), and Infineon shall have
- * no liability arising out of any Security Breaches. Unless otherwise
- * explicitly approved by Infineon, the Software may not be used in any
- * application where a failure of the Product or any consequences of the use
- * thereof can reasonably be expected to result in personal injury.
+* (c) 2025-2026, Infineon Technologies AG, or an affiliate of Infineon
+* Technologies AG. All rights reserved.
+* This software, associated documentation and materials ("Software") is
+* owned by Infineon Technologies AG or one of its affiliates ("Infineon")
+* and is protected by and subject to worldwide patent protection, worldwide
+* copyright laws, and international treaty provisions. Therefore, you may use
+* this Software only as provided in the license agreement accompanying the
+* software package from which you obtained this Software. If no license
+* agreement applies, then any use, reproduction, modification, translation, or
+* compilation of this Software is prohibited without the express written
+* permission of Infineon.
+*
+* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+* INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
+* THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
+* SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
+* Infineon reserves the right to make changes to the Software without notice.
+* You are responsible for properly designing, programming, and testing the
+* functionality and safety of your intended application of the Software, as
+* well as complying with any legal requirements related to its use. Infineon
+* does not guarantee that the Software will be free from intrusion, data theft
+* or loss, or other breaches ("Security Breaches"), and Infineon shall have
+* no liability arising out of any Security Breaches. Unless otherwise
+* explicitly approved by Infineon, the Software may not be used in any
+* application where a failure of the Product or any consequences of the use
+* thereof can reasonably be expected to result in personal injury.
+
  ******************************************************************************/
 #include "nsc_func.h"
 #include <arm_cmse.h>
@@ -45,7 +46,7 @@
 * reapply_pd1_secure_configs itself
 */
 #define SIZEOFPPC0                        (11u)
-#define SIZEOFPPC1                        (39u)
+#define SIZEOFPPC1                        (41u)
 
 cy_en_prot_region_t reapply_pd1_ppc_0_regions[SIZEOFPPC0] =
 {
@@ -112,6 +113,8 @@ cy_en_prot_region_t reapply_pd1_ppc_1_regions[SIZEOFPPC1] =
     PROT_PERI1_TDM0_TDM_STRUCT1_TDM_TX_STRUCT_TX, /* Peri 1, Address 0x44418200, size 0x00000100 */
     PROT_PERI1_TDM0_TDM_STRUCT0_TDM_RX_STRUCT_RX, /* Peri 1, Address 0x44418100, size 0x00000100 */
     PROT_PERI1_TDM0_TDM_STRUCT1_TDM_RX_STRUCT_RX, /* Peri 1, Address 0x44418300, size 0x00000100 */
+    PROT_PERI1_USBHS_DWC_otg_intreg_CONTROLLER,
+    PROT_PERI1_USBHS_SS_SUBSYSTEM, /* Peri 1, Address 0x44940000, size 0x00000040 */
 };
 
 /* 
@@ -153,10 +156,6 @@ void __attribute__((cmse_nonsecure_entry)) reapply_pd1_secure_configs(void)
             while(1);
         }
     }
-
-    /* Enables the PD1 Power Domain */
-    Cy_System_EnablePD1();
-
     /* Implemented the re-configuration as a loop, it could be individual calls */
     for (uint32_t index = 0; index < SIZEOFPPC1 ; index ++)
     {
@@ -167,8 +166,11 @@ void __attribute__((cmse_nonsecure_entry)) reapply_pd1_secure_configs(void)
             while(1);
         }
     }
-
-    /*
+    
+    /* Enables the PD1 Power Domain */
+    Cy_System_EnablePD1_S();
+    
+    /* 
     * Initialize the clock for the CY_MMIO_CM55_TCM peripheral group.
     * This sets up the necessary clock and peripheral routing to ensure
     * the CY_MMIO_CM55_TCM can be correctly accessed and utilized.
@@ -192,6 +194,36 @@ void __attribute__((cmse_nonsecure_entry)) reapply_pd1_secure_configs(void)
         CY_MMIO_TDM0_CLK_HF_NR
     );
 
+    /* Re-apply PERI1 group-level clock dividers (lost on PD1 power cycle): Needed for USBHS */
+    Cy_SysClk_PeriGroupSetDivider((1 << 8) | 3, 3U);  /* PERI1 Group 3 ?4 */
+
+    /*=========================================================================
+     * Re-apply TDM peripheral clock divider and assignment.
+     * Placed BEFORE Cy_PPC0/1_Init() because PPC re-init locks down
+     * PROT_PERI1_GR1_GROUP (pcMask=0xE7, SECURE, PRIV) which causes
+     * a processing fault on subsequent register writes via API.
+     * PeriGroupSlaveInit already works here, so clock re-apply is safe.
+     *=======================================================================*/
+    /* Re-apply PERI1 group-level clock dividers (lost on PD1 power cycle) */
+//    Cy_SysClk_PeriGroupSetDivider((1 << 8) | 1, 1U);  /* PERI1 Group 1 �2 (TDM group) */
+//    Cy_SysClk_PeriGroupSetDivider((1 << 8) | 3, 3U);  /* PERI1 Group 3 �4 */
+
+    // /*=========================================================================
+    //  * DEBUG: Snapshot registers AFTER clock re-apply, BEFORE PPC init.
+    //  *=======================================================================*/
+    // volatile uint32_t dbg_s_peri1_gr1_clk_ctl_after = CY_GET_REG32(0x44004040UL);
+    // volatile uint32_t dbg_s_pclk1_frac_div_after    = CY_GET_REG32(0x44042200UL);
+    // volatile uint32_t dbg_s_pclk1_div_cmd_after     = CY_GET_REG32(0x44042000UL);
+
+    // (void)dbg_rc_dis;
+    // (void)dbg_rc_set;
+    // (void)dbg_rc_en;
+    // (void)dbg_rc_assign;
+    // (void)dbg_s_peri1_gr1_clk_ctl_after;
+    // (void)dbg_s_pclk1_frac_div_after;
+    // (void)dbg_s_pclk1_div_cmd_after;
+    // /* END DEBUG � set breakpoint here to inspect all dbg_rc_* and _after vars */
+
     /* 
     * Initialize the clock for the SMIF0 peripheral group.
     * This sets up the necessary clock and peripheral routing to ensure
@@ -202,6 +234,14 @@ void __attribute__((cmse_nonsecure_entry)) reapply_pd1_secure_configs(void)
         CY_MMIO_SMIF0_GROUP_NR,
         CY_MMIO_SMIF0_SLAVE_NR,
         CY_MMIO_SMIF0_CLK_HF_NR
+    );
+
+    /* Initialize the clock for the USBHS peripheral group */
+    Cy_SysClk_PeriGroupSlaveInit(
+        CY_MMIO_USBHS_PERI_NR, 
+        CY_MMIO_USBHS_GROUP_NR, 
+        CY_MMIO_USBHS_SLAVE_NR, 
+        CY_MMIO_USBHS_CLK_HF_NR
     );
     
     /* Enable SOCMEM */

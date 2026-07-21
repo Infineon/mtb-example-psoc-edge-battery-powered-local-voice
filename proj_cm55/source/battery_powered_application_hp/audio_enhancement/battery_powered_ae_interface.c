@@ -43,6 +43,13 @@
 
 #include "FreeRTOS.h"
 #include "queue.h"
+#include "task.h"
+
+#include <string.h>
+
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+#include "audio_usb_send_utils.h"
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
 
 #ifdef PROFILER_ENABLE
 #include "cy_afe_profiler.h"
@@ -55,12 +62,24 @@
 
 #define APP_BUF_INFO_QUEUE_COUNT                       (200u)
 
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+#define AE_USB_QUEUE_ELEMENTS                          (20u)
+#define AE_USB_QUEUE_SIZE                              (MONO_AUDIO_DATA_IN_BYTES*7)
+#define AE_USB_STACK_SIZE                              (1024u)
+#define AE_USB_TASK_PRIORITY                           (4u)
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
+
 /*******************************************************************************
 * Global Variables
 *******************************************************************************/
 
 cy_afe_t afe_handle = NULL;
 QueueHandle_t app_buf_info_queue = NULL;
+
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+QueueHandle_t ae_usb_queue_handle = NULL;
+static TaskHandle_t rtos_ae_usb_task = NULL;
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
 
 /*******************************************************************************
 * Function Name: license_limitation_exit
@@ -98,11 +117,26 @@ void license_limitation_exit()
 void audio_enhancement_process_output(ae_buffer_info_t *output_buffer)
 {
     cy_svc_buffer_info_t buffer_info = 0;
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+    BaseType_t ret = pdFALSE;
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
 
     if(pdTRUE == xQueueReceive(app_buf_info_queue, &buffer_info, portMAX_DELAY))
     {
         battery_powered_inference_feed((short*)output_buffer->output_buf, buffer_info);
     }
+
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+    if (ae_usb_queue_handle != NULL)
+    {
+        ret = xQueueSend(ae_usb_queue_handle, (void*)output_buffer, 0);
+    }
+    if (pdTRUE != ret)
+    {
+        app_log_print(">>> Send failed to AE USB task - Queue full \\r\\n");
+    }
+    
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
     
 #if AE_APP_PROFILE
     cy_afe_profile(AFE_PROFILE_CMD_PRINT_STATS_1SEC, NULL);
@@ -150,6 +184,23 @@ int battery_powered_ae_init(uint8_t channels)
     {
         app_log_print("DEEPCRAFT Audio Enhancement initialization failed \r\n");
     }
+
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+    ae_usb_queue_handle = xQueueCreate(AE_USB_QUEUE_ELEMENTS, AE_USB_QUEUE_SIZE);
+    if (ae_usb_queue_handle == NULL)
+    {
+        app_log_print("Init queue for AE USB streamer queue failed \r\n");
+        CY_ASSERT(0);
+    }
+
+    BaseType_t rtos_task_status = xTaskCreate(bplv_ae_usb_task, "AE_USB_task",
+                        AE_USB_STACK_SIZE, NULL, AE_USB_TASK_PRIORITY,
+                        &rtos_ae_usb_task);
+    if (pdPASS != rtos_task_status)
+    {
+        app_log_print("Failed to create AE USB task \r\n");
+    }
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
 
     return result;
 }
@@ -199,5 +250,41 @@ int battery_powered_ae_feed(void* audio_input, void* aec_buffer, cy_svc_buffer_i
 
     
 }
+
+#ifdef CY_AFE_ENABLE_TUNING_FEATURE
+/*******************************************************************************
+* Function Name: bplv_ae_usb_task
+********************************************************************************
+* Summary:
+* AE USB streamer task for tuning feature.
+*
+* Parameters:
+*  arg - Task argument (unused)
+*
+* Return:
+*  None
+*
+*******************************************************************************/
+void bplv_ae_usb_task(void *arg)
+{
+    (void)arg;
+    char ae_usb_data[AE_USB_QUEUE_SIZE] = {0};
+    ae_buffer_info_t *ae_usb_data_ptr = NULL;
+     
+    while(1)
+    {
+        memset(ae_usb_data, 0, AE_USB_QUEUE_SIZE);
+        if (pdTRUE == xQueueReceive(ae_usb_queue_handle, (void*)ae_usb_data, portMAX_DELAY))
+        {
+            ae_usb_data_ptr = (ae_buffer_info_t*)ae_usb_data;
+    
+            usb_send_out_dbg_put(USB_CHANNEL_1, (int16_t *)ae_usb_data_ptr->dbg_output1);
+            usb_send_out_dbg_put(USB_CHANNEL_2, (int16_t *)ae_usb_data_ptr->dbg_output2);      
+            usb_send_out_dbg_put(USB_CHANNEL_3, (int16_t *)ae_usb_data_ptr->dbg_output3);
+            usb_send_out_dbg_put(USB_CHANNEL_4, (int16_t *)ae_usb_data_ptr->dbg_output4);
+        }
+    }
+}
+#endif /* CY_AFE_ENABLE_TUNING_FEATURE */
 
 /* [] END OF FILE */

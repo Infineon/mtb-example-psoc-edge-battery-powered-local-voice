@@ -48,13 +48,23 @@ extern "C"
 * Functions Prototypes
 *****************************************************************************/
 
-void conv_non_interleaved_to_stereo(uint16_t *stereo_non_interleaved,
-                                    uint16_t *stereo_interleaved);
+void convert_stereo_non_interleaved_to_stereo_interleaved(
+        uint16_t *stereo_non_interleaved,
+        uint16_t *stereo_interleaved);
 
-void conv_stereo_to_non_interleaved(uint16_t *stereo_interleaved,
-                                    uint16_t *stereo_non_interleaved);
+void convert_interleaved_to_stereo_non_interleaved(
+        uint16_t *stereo_interleaved,
+        uint16_t *stereo_non_interleaved);
 
-void conv_stereo_to_mono(uint16_t *stereo, uint16_t *mono);
+void convert_stereo_interleaved_to_mono(
+        uint16_t *stereo,
+        uint16_t *mono, int16_t samples_per_10ms);
+
+void convert_mono_to_stereo_interleaved(
+        uint16_t *stereo,
+        uint16_t *mono, int16_t samples_per_10ms);
+        
+void swap_stereo_channel(uint16_t *in, uint16_t *out);
 
 
 #ifdef __cplusplus

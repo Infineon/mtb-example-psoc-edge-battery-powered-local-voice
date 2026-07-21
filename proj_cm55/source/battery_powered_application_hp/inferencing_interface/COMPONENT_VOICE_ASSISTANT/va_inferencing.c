@@ -79,7 +79,7 @@ void print_voice_assistant_status(cy_rslt_t result, va_event_t event, va_data_t 
         }
         else if ( event == VA_EVENT_CMD_TIMEOUT /*|| event  == VA_EVENT_CMD_SILENCE_TIMEOUT*/)
         {
-            //va_intent_to_id(INF_TIMEOUT);
+            va_intent_to_id(INF_TIMEOUT);
         }
         else if ( event == VA_EVENT_CMD_SILENCE_TIMEOUT)
         {

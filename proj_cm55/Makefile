@@ -79,7 +79,7 @@ DEFINES += CY_RTOS_AWARE
 
 DEFINES += FLASH_BOOT
 
-# Select softfp or hardfp floating point. Default is softfp.
+# This code example supports only hardfp.
 VFP_SELECT = hardfp
 
 # Additional / custom C compiler flags.
@@ -117,7 +117,15 @@ POSTBUILD+=
 ################################################################################
 # Application specific Configurations to use COMPONENTS, DEFINES and flags.
 ################################################################################
+ifeq ($(CONFIG_USB_STREAMING),CM55)
+DEFINES += CY_AFE_ENABLE_TUNING_FEATURE
+endif
+
 DEFINES += CY_RETARGET_IO_CONVERT_LF_TO_CRLF
+
+COMPONENTS += USB_AUDIO
+COMPONENTS += EMUSB
+COMPONENTS += USBD_BASE
 
 
 COMPONENTS +=AFE_CONFIGURATION
@@ -125,6 +133,10 @@ COMPONENTS +=APP_LOGGER
 COMPONENTS +=AUDIO_CONV_UTILS
 COMPONENTS +=INTERCORE_PIPE
 COMPONENTS +=AUDIO_INPUT_CONFIGURATION
+
+ifeq ($(CONFIG_USB_STREAMING),CM55)
+DEFINES += CY_AFE_ENABLE_TUNING_FEATURE
+endif
 
 ifeq ($(CONFIG_OP_MODE),LOW_POWER)
     DEFINES +=LOW_POWER_MODE
@@ -156,10 +168,7 @@ ifeq ($(CONFIG_INFERENCING_LIB),VOICE_ASSISTANT)
     COMPONENTS += VOICE_ASSISTANT
 endif
 
-# Neural Network Configuration. Options include
-#
-# float    -- floating point for the input data and weights
-# int8x8   -- 8-bit fixed-point for the input data and weights
+# Neural Network Configuration. Currently only int16x8 is supported.
 NN_TYPE=int16x8
 
 # Choose the inference engine

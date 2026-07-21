@@ -68,7 +68,7 @@
 #define APP_LPTIMER_INTERRUPT_PRIORITY      (1U)
 
 #ifdef LOW_POWER_MODE
-#define CM55_EXT_FLASH_START                (void*)(0x60480400)
+#define CM55_EXT_FLASH_START                (void*)(0x60580400)
 #define CM55_SOCMEM_START                   (void*)(CY_CM55_APP_BOOT_ADDR)
 #define CM55_IMAGE_SIZE                     (1940000)
 #define FIRST_LAUNCH_OF_CM55_ADDR           (0x240FEFF0)
@@ -78,6 +78,10 @@
 #define PD1_OFF_TASK_STACK_SIZE             (configMINIMAL_STACK_SIZE * 4)
 #define PD1_OFF_TASK_PRIORITY               (configMAX_PRIORITIES - 4)
 #endif /* HP_INFERENCING_ENABLE */
+
+#define LED_OFF_TASK_NAME                   ("LED Off Task")
+#define LED_OFF_TASK_STACK_SIZE             (configMINIMAL_STACK_SIZE)
+#define LED_OFF_TASK_PRIORITY               (configMAX_PRIORITIES - 4)
 
 
 #define WAIT_FOR_TX_COMPLETE()              while (!(Cy_SCB_UART_IsTxComplete \
@@ -93,7 +97,6 @@
 /* Disables the High Frequency Clocks */
 #define CY_CFG_SYSCLK_CLKHF5                (5U)
 #define CY_CFG_SYSCLK_CLKHF6                (6U)
-#define CY_CFG_SYSCLK_CLKHF8                (8U)
 #define CY_CFG_SYSCLK_CLKHF11               (11U)
 #define CY_CFG_SYSCLK_CLKHF12               (12U)
 #define CY_CFG_SYSCLK_CLKHF13               (13U)
@@ -105,7 +108,7 @@
 #define WAIT_TIME_AFTER_LICENSE_EXPIRE      (10U)
 
 /* Wait time after CM55 is booted */
-#define WAIT_TIME_AFTER_BOOT_CM55           (20U)
+#define WAIT_TIME_AFTER_BOOT_CM55           (10U)
 
 /* Time to check everytime if Cm55 is in deep sleep or not */
 #define GET_CM55_DEEP_SLEEP_STATUS_DELAY    (2U)
@@ -127,7 +130,7 @@ static void setup_tickless_idle_timer(void);
 
 void vApplicationDaemonTaskStartupHook( void );
 
-#ifdef LOW_POWER_MODE
+#ifdef PD1_POWER_CYCLE
 static void disable_cm55_n_turn_off_pd1(void);
 #endif /* LOW_POWER_MODE */
 /*******************************************************************************
@@ -145,10 +148,14 @@ static mtb_hal_lptimer_t lptimer_obj;
 /* Define the pointer to the memory address */
 volatile uint8_t* first_launch_of_cm55 = (uint8_t *)FIRST_LAUNCH_OF_CM55_ADDR; 
 
+#ifdef PD1_POWER_CYCLE
+TaskHandle_t pd1_disable_task_handle = NULL;
 volatile bool disable_cm55_n_turn_off_pd1_flag = false;
+#endif /* PD1_POWER_CYCLE */
+
 volatile bool  asr_detected_indication_flag = false;
 
-TaskHandle_t pd1_disable_task_handle = NULL;
+TaskHandle_t led_task_handle = NULL;
 
 #if ENABLE_CM33_LOGS
 /* Context reference structure for Debug UART */
@@ -189,7 +196,48 @@ static cy_stc_syspm_callback_t retarget_io_syspm_cb =
     .order              = SYSPM_CALLBACK_ORDER
 };
 #endif
+
+#ifndef PD1_POWER_CYCLE
+/*******************************************************************************
+ * Function Name: led_task 
+ *******************************************************************************
+ * Summary:
+ * FreeRTOS Task for LED Operations when PD1 power cycling is not enabled.
+ *
+ * Parameters:
+ *  void * arg
+ *
+ * Return:
+ *  void
+ *
+ ******************************************************************************/
+static void led_task(void * arg)
+{
+    CY_UNUSED_PARAMETER(arg);
+    for (;;)
+    {
+        if(asr_detected_indication_flag)
+        {
+            static uint16_t asr_detected_indication_count = 0;
+            asr_detected_indication_count++;
+            if(ASRD_LED_TURN_OFF_DELAY_COUNTER == asr_detected_indication_count)
+            {
+                asr_detected_indication_flag = false;
+                asr_detected_indication_count = 0;
+                Cy_GPIO_Write(CYBSP_LED_RED_PORT, CYBSP_LED_RED_PIN, CYBSP_LED_STATE_OFF);
+                Cy_GPIO_Write(CYBSP_LED_GREEN_PORT, CYBSP_LED_GREEN_PIN, CYBSP_LED_STATE_OFF);
+                Cy_GPIO_Write(CYBSP_LED_BLUE_PORT, CYBSP_LED_BLUE_PIN, CYBSP_LED_STATE_OFF);
+                vTaskSuspend(led_task_handle);
+                __DMB();
+            }
+        }
+        vTaskDelay(PD1_TASK_DELAY);        
+    }
+}
+#endif
+
 #ifdef HP_INFERENCING_ENABLE
+#ifdef PD1_POWER_CYCLE
 /*******************************************************************************
  * Function Name: pd1_disable_task 
  *******************************************************************************
@@ -208,7 +256,6 @@ static void pd1_disable_task(void * arg)
     CY_UNUSED_PARAMETER(arg);
     for (;;)
     {
-
         if(disable_cm55_n_turn_off_pd1_flag)
         {
             extern void disable_cm55_n_turn_off_pd1_on_svc_event(void);
@@ -232,6 +279,7 @@ static void pd1_disable_task(void * arg)
                         /* Whenever PD1 is turned OFF, suspend pd1_disable_task */
                         vTaskSuspend(pd1_disable_task_handle);
                         disable_cm55_n_turn_off_pd1_flag = false;
+                       __DMB();
                     }
                 }
                 else
@@ -239,12 +287,14 @@ static void pd1_disable_task(void * arg)
                     /* Whenever PD1 is turned OFF, suspend pd1_disable_task */
                     vTaskSuspend(pd1_disable_task_handle);
                     disable_cm55_n_turn_off_pd1_flag = false;
+                   __DMB();
                 }
             }
         }
         vTaskDelay(PD1_TASK_DELAY);
     }
 }
+#endif /* PD1_POWER_CYCLE */
 #endif /* HP_INFERENCING_ENABLE */
 #endif /* LOW_POWER_MODE */
 
@@ -321,31 +371,51 @@ int main(void)
 #endif
 
 #if LOW_POWER_MODE
+#ifdef PD1_POWER_CYCLE
     *first_launch_of_cm55 = 1;
+#else
+    *first_launch_of_cm55 = 0;
+#endif /* PD1_POWER_CYCLE */
     /* Copy CM55 image from external flash to SOCMEM */
     memcpy(CM55_SOCMEM_START, CM55_EXT_FLASH_START, CM55_IMAGE_SIZE);
     /* Launch CM55 */
     Cy_SysEnableCM55(MXCM55, CY_CM55_APP_BOOT_ADDR, CM55_BOOT_WAIT_TIME_USEC);
     Cy_SysLib_Delay(WAIT_TIME_AFTER_BOOT_CM55);
 #ifdef HP_INFERENCING_ENABLE
+#ifdef PD1_POWER_CYCLE
     /* Create the FreeRTOS Task */
     result = xTaskCreate(pd1_disable_task, PD1_OFF_TASK_NAME,
                         PD1_OFF_TASK_STACK_SIZE, NULL,
                         PD1_OFF_TASK_PRIORITY, &pd1_disable_task_handle);
-#endif /* HP_INFERENCING_ENABLE */
+#else
+    /* Create the FreeRTOS Task */
+    result = xTaskCreate(led_task, LED_OFF_TASK_NAME,
+                        LED_OFF_TASK_STACK_SIZE, NULL,
+                        LED_OFF_TASK_PRIORITY, &led_task_handle);
     
+    /* Dont start this task until LPWWD is detected */
+    vTaskSuspend(led_task_handle);                        
+
+#endif /* PD1_POWER_CYCLE */
+#endif /* HP_INFERENCING_ENABLE */
+
+#ifdef PD1_POWER_CYCLE
     /* Disable the CM55 and turn off the Power Domain 1 (PD1) */
     disable_cm55_n_turn_off_pd1();
+#endif /* PD1_POWER_CYCLE */    
+
 
     Cy_SysClk_ClkHfDisable(CY_CFG_SYSCLK_CLKHF4);
     Cy_SysClk_ClkHfDisable(CY_CFG_SYSCLK_CLKHF5);
     Cy_SysClk_ClkHfDisable(CY_CFG_SYSCLK_CLKHF6);
-    Cy_SysClk_ClkHfDisable(CY_CFG_SYSCLK_CLKHF7);
-    Cy_SysClk_ClkHfDisable(CY_CFG_SYSCLK_CLKHF8);
     Cy_SysClk_ClkHfDisable(CY_CFG_SYSCLK_CLKHF11);
     Cy_SysClk_ClkHfDisable(CY_CFG_SYSCLK_CLKHF12);
     Cy_SysClk_ClkHfDisable(CY_CFG_SYSCLK_CLKHF13);
 #endif /* LOW_POWER_MODE */
+
+#ifndef PD1_POWER_CYCLE
+    mtb_hal_syspm_lock_deepsleep();
+#endif /* PD1_POWER_CYCLE */
 
 #if BATTERY_POWERED_LOCAL_VOICE_APP_ENABLE
     /* Start the RTOS Scheduler */
@@ -357,7 +427,7 @@ int main(void)
 
 }
 
-#ifdef LOW_POWER_MODE
+#ifdef PD1_POWER_CYCLE
 /*******************************************************************************
 * Function Name: disable_cm55_n_turn_off_pd1
 ********************************************************************************

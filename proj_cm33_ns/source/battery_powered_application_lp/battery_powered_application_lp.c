@@ -46,6 +46,11 @@
 
 #include "audio_feed_to_svc.h"
 
+#ifdef USB_FEED_TO_SVC
+#include "audio_usb_send_utils.h"
+#include "usb_audio_interface.h"
+#endif
+
 /*******************************************************************************
 * Function Name: battery_powered_application_lp
 ********************************************************************************
@@ -62,23 +67,27 @@
 
 int battery_powered_application_lp()
 {
-    uint32_t status;
-
     /* Initialize Staged Voice Control */
     app_init_svc();
 
+#ifdef USB_FEED_TO_SVC
+    usb_audio_interface_init();
+    usb_send_out_dbg_init_channels();
+    mtb_hal_syspm_lock_deepsleep();
+#endif
 
 #if AFE_INPUT_SOURCE==AFE_INPUT_SOURCE_MIC
 #if defined (ANALOG_MIC)
 #if ENABLE_AUTONOMOUS_ANALOG
+    uint32_t status;
     /* Refer to analog_fifo_isr() API for the data and flow. */
     status = analog_mic_interface_init();
     if(CY_AUTANALOG_SUCCESS != status)
     {
         app_log_print("Analog mic initialization failed\r\n");
     }
-    else
-    {
+#endif /* ENABLE_AUTOMOUS_ANALOG */
+
         app_log_print("\x1b[2J\x1b[;H");
         app_log_print("******************     Battery Powered Local Voice     ******************\r\n\n");
         app_log_print("Wake word: "
@@ -118,8 +127,6 @@ int battery_powered_application_lp()
 #ifndef HP_INFERENCING_ENABLE
         app_log_print("Important: Inferencing Code on CM55 unavailable - Enable it for CE to work with all functionality. \r\n");
 #endif /* HP_INFERENCING_ENABLE */
-    }
-#endif /* ENABLE_AUTOMOUS_ANALOG */
 #endif /*ANALOG_MIC*/
 #endif /* AFE_INPUT_SOURCE_MIC */
     return CY_RSLT_SUCCESS;

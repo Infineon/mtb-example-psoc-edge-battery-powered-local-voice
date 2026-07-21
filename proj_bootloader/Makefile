@@ -87,7 +87,7 @@ DEFINES+=CYBSP_SKIP_SAU_INIT CYBSP_SKIP_MPC_INIT CYBSP_SKIP_MPU_INIT CYBSP_SKIP_
 # Disable SRF veneer and initialization code.
 DEFINES+=MTB_SRF_CUSTOM_REQUEST_SUBMIT
 
-# Select softfp or hardfp floating point. Default is softfp.
+
 VFP_SELECT+=
 
 # Additional / custom C compiler flags.

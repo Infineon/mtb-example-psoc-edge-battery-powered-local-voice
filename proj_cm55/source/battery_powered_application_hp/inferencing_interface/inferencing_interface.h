@@ -50,7 +50,8 @@ extern "C"
 #define INFERENCING_TIMEOUT                             (128000)
 #define WAKEWORD_CMD_ID                                 (101)
 #define WAKEWORD_FRAME_CNT                              (200)
-#define WAKEWORD_INFERENCE_TIMEOUT_FRAMES_CNT           (250)
+#define HPWWD_POST_WWD_FRAME_CNT                        (50U)
+#define WAKEWORD_INFERENCE_TIMEOUT_FRAMES_CNT           (WAKEWORD_FRAME_CNT + HPWWD_POST_WWD_FRAME_CNT)
 #define ASR_APP_TIMEOUT                                 (500)
 
 /*******************************************************************************

@@ -48,10 +48,10 @@
 #define MAX_AUD_SAMPLES_PER_CHANNEL_FOR_10MS_DATA (160)
 
 /*******************************************************************************
-* Function Name: conv_non_interleaved_to_stereo
+* Function Name: convert_stereo_non_interleaved_to_stereo_interleaved
 ********************************************************************************
 * Summary:
-* Converts non interleaved audio to interleaved stereo
+* Converts non interleaved audio to interleaved stereo (16kHz, 10ms frame)
 *
 * Parameters:
 *  stereo_non_interleaved - (In) non interleaved data
@@ -61,8 +61,9 @@
 *
 *******************************************************************************/
 
-void conv_non_interleaved_to_stereo(uint16_t *stereo_non_interleaved,
-                                    uint16_t *stereo_interleaved)
+void convert_stereo_non_interleaved_to_stereo_interleaved(
+        uint16_t *stereo_non_interleaved,
+        uint16_t *stereo_interleaved)
 {
     int i = 0;
     for (i = 0; i < MAX_AUD_SAMPLES_PER_CHANNEL_FOR_10MS_DATA; i++)
@@ -77,10 +78,10 @@ void conv_non_interleaved_to_stereo(uint16_t *stereo_non_interleaved,
 }
 
 /*******************************************************************************
-* Function Name: conv_stereo_to_non_interleaved
+* Function Name: convert_interleaved_to_stereo_non_interleaved
 ********************************************************************************
 * Summary:
-* Converts interleaved stereo to non interleaved audio 
+* Converts interleaved stereo to non interleaved audio (16kHz, 10ms frame)
 *
 * Parameters:
 *  stereo_interleaved - (In) interleaved data
@@ -90,8 +91,9 @@ void conv_non_interleaved_to_stereo(uint16_t *stereo_non_interleaved,
 *
 *******************************************************************************/
 
-void conv_stereo_to_non_interleaved(uint16_t *stereo_interleaved,
-                                    uint16_t *stereo_non_interleaved)
+void convert_interleaved_to_stereo_non_interleaved(
+        uint16_t *stereo_interleaved,
+        uint16_t *stereo_non_interleaved)
 {
     int i = 0;
     for (i = 0; i < MAX_AUD_SAMPLES_PER_CHANNEL_FOR_10MS_DATA; i++)
@@ -109,29 +111,89 @@ void conv_stereo_to_non_interleaved(uint16_t *stereo_interleaved,
 }
 
 /*******************************************************************************
-* Function Name: conv_stereo_to_mono
+* Function Name: convert_stereo_interleaved_to_mono
 ********************************************************************************
 * Summary:
-* Converts interleaved stereo to mono 
+* Converts interleaved stereo to mono (16kHz, 10ms frame) 
 *
 * Parameters:
 *  stereo - (In) interleaved data
 *  mono - (Out) mono data
+*  samples_per_10ms - (In) number of samples per 10ms
 * Return:
 *  None
 *
 *******************************************************************************/
 
-void conv_stereo_to_mono(uint16_t *stereo, uint16_t *mono)
+void convert_stereo_interleaved_to_mono(uint16_t *stereo, uint16_t *mono, int16_t samples_per_10ms)
 {
     int i =0;
 
-    for (i = 0; i < MAX_AUD_SAMPLES_PER_CHANNEL_FOR_10MS_DATA; i++)
+    for (i = 0; i < samples_per_10ms; i++)
     {
         *mono = *stereo;
         stereo += 2;
         mono += 1;
     }
 }
+
+/*******************************************************************************
+* Function Name: convert_mono_to_stereo_interleaved
+********************************************************************************
+* Summary:
+* Converts mono to stereo (16kHz, 10ms frame) 
+*
+* Parameters:
+*  stereo - interleaved data
+*  mono -  mono data
+*  samples_per_10ms - number of samples per 10ms
+* Return:
+*  None
+*
+*******************************************************************************/
+void convert_mono_to_stereo_interleaved(uint16_t *stereo,uint16_t *mono, int16_t samples_per_10ms)
+{
+    int i =0;
+
+    for (i = 0; i < samples_per_10ms; i++)
+    {
+        *stereo = *mono;
+        stereo++;
+        *stereo = *mono;
+        stereo++;
+        mono++;
+    }
+}
+
+
+/*******************************************************************************
+* Function Name: swap_stereo_channel
+********************************************************************************
+* Summary:
+* Swaps L and R channels
+*
+* Parameters:
+*  in - Input Stereo audio
+*  out - Output Stereo audio
+* Return:
+*  None
+*
+*******************************************************************************/
+
+void swap_stereo_channel(uint16_t *in, uint16_t *out)
+{
+    
+    int index = 0;
+    
+    for (index = 0; index < MAX_AUD_SAMPLES_PER_CHANNEL_FOR_10MS_DATA; index++)
+    {
+        out[2 * index + 1]=in[2 * index];
+        out[2 * index]=in[2 * index + 1];
+    }
+    
+    
+}
+
+
 
 /* [] END OF FILE */
