@@ -123,7 +123,7 @@ CONFIG_INFERENCING_MODE=HP_INFERENCING
 
 
 ##################### Enable USB on CM33 or CM55 #######################
-# CM33              - Enable USB streaming input on CM33, The audio input 
+# CM33              - Enable USB streaming input on CM33, The audio input
 #                     from USB Host (PC) is provided as input to the kit.
 # CM55              - Enable USB streaming on CM55, the audio from the kit
 #                     is streamed back to the USB host (PC) via USB.
@@ -159,7 +159,7 @@ SRAM_LOADING_WITH_EPB=TRUE
 #NOTE:Check the JSON file for the command parameters
 
 ifeq ($(SRAM_LOADING_WITH_EPB),TRUE)
-  COMBINE_SIGN_JSON=bsps/TARGET_$(TARGET)/config/GeneratedSource/boot_with_bldr.json
+  COMBINE_SIGN_JSON=configs/boot_with_bldr.json
 	DEFINES+=CY_CM33_NS_APP_BOOT_ADDR=0x24042400
 	DEFINES+=CY_CM55_APP_BOOT_ADDR=0x26311400
 

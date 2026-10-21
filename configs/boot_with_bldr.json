@@ -1,0 +1,190 @@
+{
+    "schema-version": 1.0,
+    "content":
+    [
+        {
+            "name": "sign_proj_bootloader",
+            "enabled" : true,
+            "commands" :
+            [
+                {
+                    "command" : "sign",
+                    "inputs" :
+                    [
+                        {
+                            "file" : "../build/project_hex/proj_bootloader.hex",
+                            "header-size": "0x400",
+                            "fill-value" : "0x0",
+                            "slot-size" : "0x00028000",
+                            "min-erase-size": "0x10",
+                            "hex-address" : "0x32011000"
+                        }
+                    ],
+                    "outputs":
+                    [
+                        {
+                            "file" : "../build/project_hex/proj_bootloader_signed.hex",
+                            "format": "ihex"
+                        }
+                    ],
+                    "extra_config" : [
+                        {
+                            "project" : "proj_bootloader",
+                            "debug_config_name" : "proj_bootloader",
+                            "default" : false,
+                            "build_dependency" : "project"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Image 0",
+            "enabled" : true,
+            "commands" :
+            [
+                {
+                    "command" : "sign",
+                    "inputs" :
+                    [
+                        {
+                            "file" : "../build/project_hex/proj_cm33_s.hex",
+                            "header-size": "0x400",
+                            "fill-value" : "0xFF",
+                            "slot-size" : "0x00200000",
+                            "overwrite-only" : true,
+                            "load-address" : "0x34012000",
+                            "hex-address" : "0x60100000"
+                        }
+                    ],
+                    "outputs":
+                    [
+                        {
+                            "file" : "../build/project_hex/proj_cm33_s_signed.hex",
+                            "format": "ihex"
+                        }
+                    ]
+                    ,
+                    "extra_config" : [
+                        {
+                            "project" : "proj_cm33_s",
+                            "debug_config_name" : "proj_cm33_s",
+                            "default" : false,
+                            "build_dependency" : "project"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Image 1",
+            "enabled" : true,
+            "commands" :
+            [
+                {
+                    "command" : "sign",
+                    "inputs" :
+                    [
+                        {
+                            "file" : "../build/project_hex/proj_cm33_ns.hex",
+                            "header-size": "0x400",
+                            "fill-value" : "0xFF",
+                            "slot-size" : "0x00100000",
+                            "overwrite-only" : true,
+                            "load-address" : "0x34042000",
+                            "hex-address" : "0x60340000"
+                        }
+                    ],
+                    "outputs":
+                    [
+                        {
+                            "file" : "../build/project_hex/proj_cm33_ns_signed.hex",
+                            "format": "ihex"
+                        }
+                    ]
+                    ,
+                    "extra_config" : [
+                        {
+                            "project" : "proj_cm33_ns",
+                            "debug_config_name" : "proj_cm33_ns",
+                            "default" : false,
+                            "build_dependency" : "project"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Image 2",
+            "enabled" : true,
+            "commands" :
+            [
+                {
+                    "command" : "sign",
+                    "inputs" :
+                    [
+                        {
+                            "file" : "../build/project_hex/proj_cm55.hex",
+                            "header-size": "0x400",
+                            "fill-value" : "0xFF",
+                            "slot-size" : "0x00380000",
+                            "overwrite-only" : true,
+                            "load-address" : "0x36311000",
+                            "hex-address" : "0x60580000"
+                        }
+                    ],
+                    "outputs":
+                    [
+                        {
+                            "file" : "../build/project_hex/proj_cm55_signed.hex",
+                            "format": "ihex"
+                        }
+                    ]
+                    ,
+                    "extra_config" : [
+                        {
+                            "project" : "proj_cm55",
+                            "debug_config_name" : "proj_cm55",
+                            "default" : false,
+                            "build_dependency" : "project"
+                        }
+                    ]
+                }
+            ]
+        }
+,
+        {
+            "name": "merge",
+            "enabled": true,
+            "commands" :
+            [
+                {
+                    "command" : "merge",
+                    "inputs" :
+                    [
+                        {
+                            "file" : "../build/project_hex/proj_bootloader_signed.hex"
+                        },
+                        {
+                            "file" : "../build/project_hex/proj_cm33_s_signed.hex"
+                        },
+                        {
+                            "file" : "../build/project_hex/proj_cm33_ns_signed.hex"
+                        },
+                        {
+                            "file" : "../build/project_hex/proj_cm55_signed.hex"
+                        }
+                    ],
+                    "outputs" :
+                    [
+                        {
+                            "file" : "../build/app_combined.hex",
+                            "format" : "ihex",
+                            "overlap" : "ignore"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

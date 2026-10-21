@@ -185,6 +185,7 @@ Document title: *CE242354* – *PSOC&trade; Edge MCU: Battery-powered local voic
  1.1.0   | Added MTB_SUPPORTED_TOOLCHAINS variable for automated build systems <br> Updated design files to fix ModusToolbox&trade; v3.7 build warnings
  1.2.0   | Added PTT feature <br> Added support for other wake word models in LPWWD only mode <br> Enabled MCPS profiling feature <br> Added LLVM_ARM compiler support
  1.3.0   | Added USB streaming feature <br> Added Bring your own LPWWD feature and other minor updates
+ 1.3.1   | Fix COMBINE_SIGN_JSON shareability for fresh clone <br> Updated the linker script to support LLVM ATfE v22.1.0
 <br>
 
 
